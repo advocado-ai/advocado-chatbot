@@ -1,0 +1,6 @@
+streamlit
+supabase
+sentence-transformers
+anthropic
+python-dotenv
+watchdog
