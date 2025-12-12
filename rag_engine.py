@@ -37,12 +37,14 @@ class RAGEngine:
         params = {
             'query_embedding': query_embedding,
             'match_threshold': threshold,
-            'match_count': match_count
+            'match_count': match_count,
+            'filter_document_type': None,
+            'filter_folder': None
         }
         
         try:
             # Call the RPC function we created earlier
-            response = self.client.rpc('match_documents', params).execute()
+            response = self.client.rpc('match_evidence_vectors', params).execute()
             return response.data
         except Exception as e:
             st.error(f"Database search error: {e}")

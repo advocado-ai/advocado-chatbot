@@ -15,7 +15,7 @@ class LLMClient:
         else:
             self.client = Anthropic(api_key=api_key)
 
-    def generate_response(self, query: str, context_chunks: List[Dict[str, Any]]) -> str:
+    def generate_response(self, query: str, context_chunks: List[Dict[str, Any]], model_id: str = "claude-sonnet-4-5-20250929") -> str:
         """
         Generates a response based on the query and retrieved context.
         """
@@ -43,7 +43,7 @@ Rules:
         # 3. Call API
         try:
             message = self.client.messages.create(
-                model="claude-4.5-sonnet", # Using Claude 4.5 as requested
+                model=model_id,
                 max_tokens=1024,
                 temperature=0.2,
                 system=system_prompt,
