@@ -196,26 +196,40 @@ elif page == t["nav_chat"]:
             message_placeholder = st.empty()
             message_placeholder.markdown(t["searching"])
             
-            # A. Retrieve Context
-            results = st.session_state.rag.search(prompt, match_count=match_count, threshold=threshold)
+            # Get recent history for context (exclude current message)
+            recent_history = st.session_state.messages[:-1][-5:] if len(st.session_state.messages) > 1 else []
+            
+            # A. Optimize Query
+            optimized_query = st.session_state.llm.optimize_query(
+                prompt, 
+                recent_history, 
+                model_id=selected_model.api_id
+            )
+            
+            if optimized_query != prompt:
+                st.caption(f"🔍 Searched for: {optimized_query}")
+            
+            # B. Retrieve Context
+            results = st.session_state.rag.search(optimized_query, match_count=match_count, threshold=threshold)
             
             if not results:
                 response_text = t["no_results"]
                 sources = []
             else:
-                # B. Generate Answer
+                # C. Generate Answer
                 message_placeholder.markdown(t["analyzing"].format(model=selected_model.name))
                 response_text = st.session_state.llm.generate_response(
                     prompt, 
                     results, 
+                    history=recent_history,
                     model_id=selected_model.api_id
                 )
                 sources = results
 
-            # C. Display Final Response
+            # D. Display Final Response
             message_placeholder.markdown(response_text)
             
-            # D. Save to History
+            # E. Save to History
             st.session_state.messages.append({
                 "role": "assistant", 
                 "content": response_text,

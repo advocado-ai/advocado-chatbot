@@ -15,7 +15,53 @@ class LLMClient:
         else:
             self.client = Anthropic(api_key=api_key)
 
-    def generate_response(self, query: str, context_chunks: List[Dict[str, Any]], model_id: str = "claude-sonnet-4-5-20250929") -> str:
+    def optimize_query(self, query: str, history: List[Dict[str, Any]], model_id: str = "claude-sonnet-4-5-20250929") -> str:
+        """
+        Uses the LLM to rewrite the search query based on conversation history.
+        """
+        if not self.client:
+            return query
+
+        # If no history, just return the original query
+        if not history:
+            return query
+
+        # Format history for the prompt
+        history_text = ""
+        for msg in history:
+            role = msg["role"]
+            content = msg["content"]
+            history_text += f"{role.upper()}: {content}\n"
+
+        prompt = f"""Based on the following conversation history and the user's latest question, generate a specific, standalone search query to find relevant legal evidence.
+        
+Conversation History:
+{history_text}
+
+User's Question: {query}
+
+The search query should:
+1. Resolve any pronouns (e.g., "he", "it", "that meeting") to specific names or entities mentioned in the history.
+2. Include key technical terms, names, or dates.
+3. Be optimized for a vector similarity search.
+
+Return ONLY the search query string. Do not add quotes or explanations."""
+
+        try:
+            message = self.client.messages.create(
+                model=model_id,
+                max_tokens=100,
+                temperature=0.0,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return message.content[0].text.strip()
+        except Exception as e:
+            print(f"Query optimization error: {e}")
+            return query
+
+    def generate_response(self, query: str, context_chunks: List[Dict[str, Any]], history: List[Dict[str, Any]] = None, model_id: str = "claude-sonnet-4-5-20250929") -> str:
         """
         Generates a response based on the query and retrieved context.
         """
@@ -40,6 +86,20 @@ Rules:
 4. If the context contains Japanese, translate the relevant parts to English in your answer, but keep the original meaning.
 """
 
+        # 3. Prepare Messages with History
+        final_messages = []
+        
+        # Add history if available (excluding the current user message)
+        if history:
+            for msg in history:
+                 final_messages.append({"role": msg["role"], "content": msg["content"]})
+        
+        # Add the current turn with context
+        final_messages.append({
+            "role": "user", 
+            "content": f"Context:\n{context_text}\n\nQuestion: {query}"
+        })
+
         # 3. Call API
         try:
             message = self.client.messages.create(
@@ -47,9 +107,7 @@ Rules:
                 max_tokens=1024,
                 temperature=0.2,
                 system=system_prompt,
-                messages=[
-                    {"role": "user", "content": f"Context:\n{context_text}\n\nQuestion: {query}"}
-                ]
+                messages=final_messages
             )
             return message.content[0].text
         except Exception as e:
