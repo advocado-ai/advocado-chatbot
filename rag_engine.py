@@ -49,3 +49,41 @@ class RAGEngine:
         except Exception as e:
             st.error(f"Database search error: {e}")
             return []
+
+    def find_similar(self, document_id: int, match_count: int = 5) -> List[Dict[str, Any]]:
+        """
+        Find documents similar to an existing document ID.
+        """
+        try:
+            # 1. Get the embedding of the source document
+            # We select the embedding column for the specific row
+            response = self.client.table('evidence_vectors') \
+                .select('embedding') \
+                .eq('id', document_id) \
+                .execute()
+            
+            if not response.data:
+                st.error(f"Document ID {document_id} not found.")
+                return []
+                
+            embedding = response.data[0]['embedding']
+            
+            # 2. Search using that embedding
+            # We reuse the existing RPC function
+            params = {
+                'query_embedding': embedding,
+                'match_threshold': 0.5, # Higher threshold for "more like this"
+                'match_count': match_count,
+                'filter_document_type': None,
+                'filter_folder': None
+            }
+            
+            rpc_response = self.client.rpc('match_evidence_vectors', params).execute()
+            
+            # Filter out the document itself (RPC might return it as 1.0 match)
+            results = [r for r in rpc_response.data if r['id'] != document_id]
+            return results
+            
+        except Exception as e:
+            st.error(f"Find similar error: {e}")
+            return []

@@ -4,6 +4,7 @@ from rag_engine import RAGEngine
 from storage_client import StorageClient
 from llm_client import LLMClient
 from models import MODELS, DEFAULT_MODEL_ID, get_model_by_id
+from translations import TRANSLATIONS
 
 # Page Config
 st.set_page_config(
@@ -71,22 +72,27 @@ if "rag" not in st.session_state:
 with st.sidebar:
     st.title("⚖️ Advocado AI")
     
+    # Language Selection
+    lang_options = list(TRANSLATIONS.keys())
+    selected_lang = st.selectbox("Language / 言語", lang_options, index=0)
+    t = TRANSLATIONS[selected_lang]
+    
     # Navigation
-    page = st.radio("Navigation", ["Chat Assistant", "Documentation"])
+    page = st.radio("Navigation", [t["nav_chat"], t["nav_docs"]])
     
     st.markdown("---")
-    st.markdown("**System Status**")
+    st.markdown(f"**{t['system_online']}**" if st.session_state.get("initialized") else f"**{t['system_offline']}**")
     if st.session_state.get("initialized"):
-        st.success("System Online")
+        st.success(t["system_online"])
     else:
-        st.error("System Offline")
+        st.error(t["system_offline"])
     
-    if page == "Chat Assistant":
+    if page == t["nav_chat"]:
         st.markdown("---")
-        st.markdown("### Settings")
+        st.markdown(f"### {t['settings']}")
         
         # Model Selection
-        st.markdown("#### Model Configuration")
+        st.markdown(f"#### {t['model_config']}")
         model_names = [m.name for m in MODELS]
         default_index = 0
         # Try to find default index
@@ -95,12 +101,12 @@ with st.sidebar:
                 default_index = i
                 break
                 
-        selected_model_name = st.selectbox("Select Model", model_names, index=default_index)
+        selected_model_name = st.selectbox(t["select_model"], model_names, index=default_index)
         
         # Get selected model object
         selected_model = next((m for m in MODELS if m.name == selected_model_name), MODELS[0])
         
-        with st.expander("ℹ️ Model Info"):
+        with st.expander(t["model_info"]):
             st.markdown(f"**{selected_model.name}**")
             st.markdown(f"_{selected_model.description}_")
             st.markdown(f"**Context:** {selected_model.context_window}")
@@ -108,65 +114,52 @@ with st.sidebar:
             st.caption(f"API ID: `{selected_model.api_id}`")
 
         st.markdown("---")
-        st.markdown("#### Search Parameters")
+        st.markdown(f"#### {t['search_params']}")
         match_count = st.slider(
-            "Evidence Chunks", 
+            t["evidence_chunks"], 
             min_value=3, 
             max_value=20, 
             value=10,
-            help="Number of evidence snippets to retrieve from the database. Higher values provide more context but may increase noise."
+            help=t["evidence_chunks_help"]
         )
         threshold = st.slider(
-            "Similarity Threshold", 
+            t["similarity_threshold"], 
             min_value=0.0, 
             max_value=1.0, 
             value=0.3,
-            help="Minimum relevance score (0-1). Lower values include more loosely related documents; higher values are stricter."
+            help=t["similarity_threshold_help"]
         )
         
-        if st.button("Clear Chat History"):
+        if st.button(t["clear_history"]):
             st.session_state.messages = []
             st.rerun()
 
-if page == "Documentation":
-    st.title("📚 Application Documentation")
+if page == t["nav_docs"]:
+    st.title(t["docs_title"])
     
-    st.markdown("""
-    ### Overview
-    This application uses Retrieval Augmented Generation (RAG) to help you search and analyze the evidence database.
+    st.markdown(f"""
+    ### {t['docs_overview_title']}
+    {t['docs_overview_text']}
     
-    ### How it Works
-    1. **Search**: Your question is converted into a mathematical vector.
-    2. **Retrieval**: We search the Supabase database for the most similar evidence chunks.
-    3. **Generation**: The selected AI model (Claude) reads the evidence and answers your question.
+    ### {t['docs_how_title']}
+    {t['docs_how_text']}
     
-    ### Settings Explained
+    ### {t['docs_settings_title']}
     
-    #### 🧠 Model Selection
-    *   **Claude Sonnet 4.5**: The default, balanced model. Good for most legal reasoning.
-    *   **Claude Haiku 4.5**: Faster, cheaper, but slightly less nuanced. Good for simple lookups.
-    *   **Claude Opus 4.5**: The most powerful model. Use for complex reasoning or drafting, but it is slower.
+    #### {t['docs_models_title']}
+    {t['docs_models_text']}
     
-    #### 🔍 Search Parameters
-    *   **Evidence Chunks**: Controls *how much* text the AI reads. 
-        *   *Increase* if the answer requires synthesizing many small details.
-        *   *Decrease* if you want focused answers or if the AI is getting confused by irrelevant info.
-    *   **Similarity Threshold**: Controls *quality control*.
-        *   **0.0**: "Show me everything, even if it's barely relevant."
-        *   **0.5**: "Only show me things that are clearly about this topic."
-        *   **0.8**: "Only show me exact matches."
-        *   *Recommended*: 0.3 - 0.5 for general queries.
+    #### {t['docs_search_title']}
+    {t['docs_search_text']}
         
-    ### Security
-    *   This application is password protected.
-    *   Evidence files are stored in a private Supabase bucket.
-    *   Links to files are temporary (signed URLs) and expire after 1 hour.
+    ### {t['docs_security_title']}
+    {t['docs_security_text']}
     """)
 
-elif page == "Chat Assistant":
+elif page == t["nav_chat"]:
     # Main Chat Interface
-    st.title("Legal Evidence Assistant")
-    st.markdown("Ask questions about the case evidence. I will search the vector database and cite specific documents.")
+    st.title(t["app_title"])
+    st.markdown(t["app_intro"])
 
     # Display Chat History
     for message in st.session_state.messages:
@@ -174,8 +167,8 @@ elif page == "Chat Assistant":
             st.markdown(message["content"])
             # If there are source documents attached to the message, display them
             if "sources" in message:
-                with st.expander("📚 View Cited Evidence Sources"):
-                    for source in message["sources"]:
+                with st.expander(t["view_sources"]):
+                    for i, source in enumerate(message["sources"]):
                         file_path = source['file_path']
                         similarity = source['similarity']
                         
@@ -184,15 +177,15 @@ elif page == "Chat Assistant":
                         
                         col1, col2 = st.columns([3, 1])
                         with col1:
-                            st.markdown(f"**{file_path}** (Relevance: {similarity:.2f})")
+                            st.markdown(f"**{i+1}. {file_path}** (Relevance: {similarity:.2f})")
                         with col2:
                             if url:
-                                st.markdown(f"[Open File ↗️]({url})")
+                                st.markdown(f"[{t['open_file']}]({url})")
                             else:
-                                st.markdown("*Link unavailable*")
+                                st.markdown(f"*{t['link_unavailable']}*")
 
     # Chat Input
-    if prompt := st.chat_input("What evidence do we have regarding..."):
+    if prompt := st.chat_input(t["chat_placeholder"]):
         # 1. User Message
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
@@ -201,17 +194,17 @@ elif page == "Chat Assistant":
         # 2. Assistant Response
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
-            message_placeholder.markdown("🔍 Searching evidence database...")
+            message_placeholder.markdown(t["searching"])
             
             # A. Retrieve Context
             results = st.session_state.rag.search(prompt, match_count=match_count, threshold=threshold)
             
             if not results:
-                response_text = "I couldn't find any relevant evidence in the database matching your query."
+                response_text = t["no_results"]
                 sources = []
             else:
                 # B. Generate Answer
-                message_placeholder.markdown(f"🤔 Analyzing documents with {selected_model.name}...")
+                message_placeholder.markdown(t["analyzing"].format(model=selected_model.name))
                 response_text = st.session_state.llm.generate_response(
                     prompt, 
                     results, 
@@ -231,19 +224,38 @@ elif page == "Chat Assistant":
         
         # D. Display Sources (Immediate view)
         if sources:
-            with st.expander("📚 View Cited Evidence Sources", expanded=False):
-                for source in sources:
+            with st.expander(t["view_sources"], expanded=False):
+                for i, source in enumerate(sources):
                     file_path = source['file_path']
                     similarity = source['similarity']
+                    doc_id = source.get('id') # Ensure your RAG search returns 'id'
+                    
                     url = st.session_state.storage.get_signed_url(file_path)
                     
-                    st.markdown(f"- **{file_path}** ({similarity:.2f})")
-                    if url:
-                        st.markdown(f"  [View Document ↗️]({url})")
-
-    # 3. Save History
-    st.session_state.messages.append({
-        "role": "assistant", 
-        "content": response_text,
-        "sources": sources
-    })
+                    st.markdown(f"**{i+1}. {file_path}** ({similarity:.2f})")
+                    
+                    col_a, col_b = st.columns([1, 1])
+                    with col_a:
+                        if url:
+                            st.markdown(f"[{t['open_file']}]({url})")
+                        else:
+                            # Show debug info in tooltip
+                            debug_msg = st.session_state.storage.get_debug_info(file_path)
+                            st.markdown(f"*{t['link_unavailable']}*", help=debug_msg)
+                    with col_b:
+                        if doc_id:
+                            # Unique key for each button
+                            if st.button(f"🔍 Find Similar", key=f"sim_{doc_id}_{i}"):
+                                try:
+                                    with st.spinner("Finding related documents..."):
+                                        # Perform similarity search
+                                        similar_docs = st.session_state.rag.find_similar(doc_id)
+                                        if similar_docs:
+                                            st.markdown("**Related Documents:**")
+                                            for sim_doc in similar_docs:
+                                                sim_score = sim_doc.get('similarity', 0.0)
+                                                st.caption(f"- {sim_doc.get('file_path', 'Unknown')} ({sim_score:.2f})")
+                                        else:
+                                            st.caption("No similar documents found.")
+                                except Exception as e:
+                                    st.error(f"Error finding similar documents: {e}")

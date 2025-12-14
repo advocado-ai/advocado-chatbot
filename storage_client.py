@@ -51,6 +51,20 @@ class StorageClient:
             print(f"Error generating signed URL for {file_path}: {e}")
             return None
 
-    def list_files(self, path: str = ""):
-        """List files in the bucket (for debugging)."""
-        return self.client.storage.from_(self.bucket_name).list(path)
+    def get_debug_info(self, file_path: str) -> str:
+        """Returns debug info about why a link might be unavailable."""
+        try:
+            storage_path = file_path.lstrip('/')
+            # Check if file exists (list files in that folder)
+            folder = os.path.dirname(storage_path)
+            filename = os.path.basename(storage_path)
+            
+            files = self.client.storage.from_(self.bucket_name).list(folder)
+            
+            found = any(f['name'] == filename for f in files)
+            if found:
+                return "File exists in bucket."
+            else:
+                return f"File '{filename}' not found in folder '{folder}'. Available: {[f['name'] for f in files]}"
+        except Exception as e:
+            return f"Error checking file: {e}"
