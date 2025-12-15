@@ -22,16 +22,15 @@ class LLMClient:
         if not self.client:
             return query
 
-        # If no history, just return the original query
-        if not history:
-            return query
-
         # Format history for the prompt
         history_text = ""
-        for msg in history:
-            role = msg["role"]
-            content = msg["content"]
-            history_text += f"{role.upper()}: {content}\n"
+        if history:
+            for msg in history:
+                role = msg["role"]
+                content = msg["content"]
+                history_text += f"{role.upper()}: {content}\n"
+        else:
+            history_text = "No previous conversation history."
 
         prompt = f"""Based on the following conversation history and the user's latest question, generate a specific, standalone search query to find relevant legal evidence.
         
@@ -44,6 +43,7 @@ The search query should:
 1. Resolve any pronouns (e.g., "he", "it", "that meeting") to specific names or entities mentioned in the history.
 2. Include key technical terms, names, or dates.
 3. Be optimized for a vector similarity search.
+4. IMPORTANT: If the User's Question is in Japanese, translate the search query into English keywords. The evidence database is in English.
 
 Return ONLY the search query string. Do not add quotes or explanations."""
 
@@ -80,10 +80,11 @@ Return ONLY the search query string. Do not add quotes or explanations."""
 Your goal is to answer the lawyer's questions ACCURATELY based ONLY on the provided evidence context.
 
 Rules:
-1. BASE your answer STRICTLY on the provided context. If the answer is not in the context, say "I cannot find evidence for that in the current database."
-2. CITE your sources. When you state a fact, reference the Source ID or File Name (e.g., "According to email-sensei.md...").
-3. Be professional, objective, and concise.
-4. If the context contains Japanese, translate the relevant parts to English in your answer, but keep the original meaning.
+1. LANGUAGE: Answer in the SAME language as the user's question. If the user asks in Japanese, answer in Japanese.
+2. REASONING: The evidence is primarily in English. You must analyze the English evidence but explain your findings in the user's language.
+3. BASE your answer STRICTLY on the provided context. If the answer is not in the context, say "I cannot find evidence for that in the current database."
+4. CITE your sources. When you state a fact, reference the Source ID or File Name (e.g., "According to email-sensei.md...").
+5. Be professional, objective, and concise.
 """
 
         # 3. Prepare Messages with History

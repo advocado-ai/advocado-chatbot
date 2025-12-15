@@ -26,7 +26,27 @@ class RAGEngine:
         # Using the same model as ingestion to ensure compatibility
         return SentenceTransformer('all-MiniLM-L6-v2')
 
-    def search(self, query: str, match_count: int = 10, threshold: float = 0.3) -> List[Dict[str, Any]]:
+    def get_available_folders(self) -> List[str]:
+        """
+        Fetches unique folder paths from the database for filtering.
+        """
+        try:
+            # Fetch distinct folders
+            # Note: Supabase JS client doesn't support .distinct() directly on select easily without a view or RPC
+            # But we can fetch 'folder' column and deduplicate in python for now if dataset is small (<10k rows)
+            # Or use a simple RPC if we had one.
+            # Let's try fetching all folders (lightweight string) and set() them.
+            
+            response = self.client.table('evidence_vectors').select('folder').execute()
+            if response.data:
+                folders = sorted(list(set(item['folder'] for item in response.data if item['folder'])))
+                return folders
+            return []
+        except Exception as e:
+            st.error(f"Error fetching folders: {e}")
+            return []
+
+    def search(self, query: str, match_count: int = 10, threshold: float = 0.3, folder_filter: str = None, folder_filters: List[str] = None) -> List[Dict[str, Any]]:
         """
         Search the vector database for relevant chunks.
         """
@@ -34,17 +54,30 @@ class RAGEngine:
         query_embedding = self.model.encode(query).tolist()
         
         # 2. Query Supabase
-        params = {
-            'query_embedding': query_embedding,
-            'match_threshold': threshold,
-            'match_count': match_count,
-            'filter_document_type': None,
-            'filter_folder': None
-        }
+        if folder_filters:
+            # Use V2 RPC that supports array filtering
+            params = {
+                'query_embedding': query_embedding,
+                'match_threshold': threshold,
+                'match_count': match_count,
+                'filter_document_type': None,
+                'filter_folders': folder_filters
+            }
+            rpc_name = 'match_evidence_vectors_v2'
+        else:
+            # Fallback to V1 for single folder or no filter (backward compatibility)
+            params = {
+                'query_embedding': query_embedding,
+                'match_threshold': threshold,
+                'match_count': match_count,
+                'filter_document_type': None,
+                'filter_folder': folder_filter
+            }
+            rpc_name = 'match_evidence_vectors'
         
         try:
-            # Call the RPC function we created earlier
-            response = self.client.rpc('match_evidence_vectors', params).execute()
+            # Call the RPC function
+            response = self.client.rpc(rpc_name, params).execute()
             results = response.data
             
             if not results:

@@ -5,6 +5,9 @@ from storage_client import StorageClient
 from llm_client import LLMClient
 from models import MODELS, DEFAULT_MODEL_ID, get_model_by_id
 from translations import TRANSLATIONS
+from streamlit_tree_select import tree_select
+from tree_utils import build_folder_tree, load_folders_from_json
+import os
 
 # Page Config
 st.set_page_config(
@@ -115,6 +118,46 @@ with st.sidebar:
 
         st.markdown("---")
         st.markdown(f"#### {t['search_params']}")
+        
+        # Folder Filter (Tree View)
+        # Force reload or check type to avoid stale state issues
+        if "folder_tree" not in st.session_state or not isinstance(st.session_state.folder_tree, list) or (st.session_state.folder_tree and not isinstance(st.session_state.folder_tree[0], dict)):
+            # Try to load from JSON first (faster/better structure), fallback to DB
+            json_path = "docs/search_by_folder/ingested_folders.json"
+            if os.path.exists(json_path):
+                print(f"Loading folders from {json_path}")
+                folders = load_folders_from_json(json_path)
+                print(f"Loaded {len(folders)} folders. Building tree...")
+                st.session_state.folder_tree = build_folder_tree(folders)
+                print("Tree built successfully.")
+            else:
+                # Fallback to DB fetch if JSON missing
+                print("JSON not found, fetching from DB")
+                folders = st.session_state.rag.get_available_folders()
+                st.session_state.folder_tree = build_folder_tree(folders)
+                print("Tree built from DB.")
+        
+        st.markdown("Filter by Folder / フォルダでフィルタ")
+        
+        # Sidebar Width Adjustment
+        st.markdown("""
+        <style>
+        /* Widen the sidebar */
+        [data-testid="stSidebar"] {
+            min-width: 400px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Changed expanded=True to help with rendering issues on load
+        with st.expander("📁 Select Folders", expanded=True):
+            if not st.session_state.folder_tree:
+                st.warning("No folders found.")
+            else:
+                return_val = tree_select(st.session_state.folder_tree, checked=[], expanded=[], key="folder_tree_select")
+            
+        selected_folders = return_val.get("checked", []) if 'return_val' in locals() else []
+        
         match_count = st.slider(
             t["evidence_chunks"], 
             min_value=3, 
@@ -203,23 +246,48 @@ elif page == t["nav_chat"]:
             recent_history = st.session_state.messages[:-1][-5:] if len(st.session_state.messages) > 1 else []
             
             # A. Optimize Query
+            start_time = time.time()
+            print(f"[{time.strftime('%X')}] Starting query optimization...")
             optimized_query = st.session_state.llm.optimize_query(
                 prompt, 
                 recent_history, 
                 model_id=selected_model.api_id
             )
+            print(f"[{time.strftime('%X')}] Optimization done ({time.time() - start_time:.2f}s): {optimized_query}")
             
             if optimized_query != prompt:
                 st.caption(f"🔍 Searched for: {optimized_query}")
             
             # B. Retrieve Context
-            results = st.session_state.rag.search(optimized_query, match_count=match_count, threshold=threshold)
+            # Handle folder filtering
+            search_start = time.time()
+            print(f"[{time.strftime('%X')}] Starting vector search with {len(selected_folders)} folders selected...")
+            
+            if selected_folders:
+                # Optimized: Send all folders to RPC at once
+                results = st.session_state.rag.search(
+                    optimized_query, 
+                    match_count=match_count, 
+                    threshold=threshold,
+                    folder_filters=selected_folders
+                )
+                print(f"[{time.strftime('%X')}] Search completed in {time.time() - search_start:.2f}s. Found {len(results)} results.")
+            else:
+                # No filter
+                results = st.session_state.rag.search(
+                    optimized_query, 
+                    match_count=match_count, 
+                    threshold=threshold
+                )
+            print(f"[{time.strftime('%X')}] Search complete ({time.time() - search_start:.2f}s). Found {len(results)} unique results.")
             
             if not results:
                 response_text = t["no_results"]
                 sources = []
             else:
                 # C. Generate Answer
+                gen_start = time.time()
+                print(f"[{time.strftime('%X')}] Generating answer...")
                 message_placeholder.markdown(t["analyzing"].format(model=selected_model.name))
                 response_text = st.session_state.llm.generate_response(
                     prompt, 
@@ -227,6 +295,7 @@ elif page == t["nav_chat"]:
                     history=recent_history,
                     model_id=selected_model.api_id
                 )
+                print(f"[{time.strftime('%X')}] Generation complete ({time.time() - gen_start:.2f}s)")
                 sources = results
 
             # D. Display Final Response
