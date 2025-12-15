@@ -45,7 +45,32 @@ class RAGEngine:
         try:
             # Call the RPC function we created earlier
             response = self.client.rpc('match_evidence_vectors', params).execute()
-            return response.data
+            results = response.data
+            
+            if not results:
+                return []
+
+            # 3. Fetch Google Drive links for these results
+            # The RPC doesn't return the google_drive_link column, so we fetch it separately
+            ids = [r['id'] for r in results]
+            try:
+                link_response = self.client.table('evidence_vectors') \
+                    .select('id, google_drive_link') \
+                    .in_('id', ids) \
+                    .execute()
+                
+                # Create a map of id -> link
+                link_map = {item['id']: item.get('google_drive_link') for item in link_response.data}
+                
+                # Merge into results
+                for r in results:
+                    r['google_drive_link'] = link_map.get(r['id'])
+                    
+            except Exception as e:
+                print(f"Error fetching Google Drive links: {e}")
+                # Continue without links if this fails
+                
+            return results
         except Exception as e:
             st.error(f"Database search error: {e}")
             return []
@@ -82,6 +107,23 @@ class RAGEngine:
             
             # Filter out the document itself (RPC might return it as 1.0 match)
             results = [r for r in rpc_response.data if r['id'] != document_id]
+            
+            if not results:
+                return []
+
+            # Fetch Google Drive links
+            ids = [r['id'] for r in results]
+            try:
+                link_response = self.client.table('evidence_vectors') \
+                    .select('id, google_drive_link') \
+                    .in_('id', ids) \
+                    .execute()
+                link_map = {item['id']: item.get('google_drive_link') for item in link_response.data}
+                for r in results:
+                    r['google_drive_link'] = link_map.get(r['id'])
+            except Exception as e:
+                print(f"Error fetching Google Drive links: {e}")
+
             return results
             
         except Exception as e:

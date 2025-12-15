@@ -172,8 +172,11 @@ elif page == t["nav_chat"]:
                         file_path = source['file_path']
                         similarity = source['similarity']
                         
-                        # Generate signed URL
-                        url = st.session_state.storage.get_signed_url(file_path)
+                        # Check for Google Drive link first
+                        url = source.get('google_drive_link')
+                        if not url:
+                            # Fallback to signed URL
+                            url = st.session_state.storage.get_signed_url(file_path)
                         
                         col1, col2 = st.columns([3, 1])
                         with col1:
@@ -244,7 +247,11 @@ elif page == t["nav_chat"]:
                     similarity = source['similarity']
                     doc_id = source.get('id') # Ensure your RAG search returns 'id'
                     
-                    url = st.session_state.storage.get_signed_url(file_path)
+                    # Check for Google Drive link first
+                    url = source.get('google_drive_link')
+                    if not url:
+                        # Fallback to signed URL
+                        url = st.session_state.storage.get_signed_url(file_path)
                     
                     st.markdown(f"**{i+1}. {file_path}** ({similarity:.2f})")
                     
