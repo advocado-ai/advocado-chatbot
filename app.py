@@ -1,5 +1,7 @@
 import streamlit as st
 import time
+import datetime
+import extra_streamlit_components as stx
 from rag_engine import RAGEngine
 from storage_client import StorageClient
 from llm_client import LLMClient
@@ -7,6 +9,7 @@ from models import MODELS, DEFAULT_MODEL_ID, get_model_by_id
 from translations import TRANSLATIONS
 from streamlit_tree_select import tree_select
 from tree_utils import build_folder_tree, load_folders_from_json
+from chat_history import ChatHistoryManager
 import os
 
 # Page Config
@@ -17,14 +20,36 @@ st.set_page_config(
 )
 
 # --- Authentication ---
+# Note: experimental_allow_widgets parameter was removed in recent Streamlit versions
+# If this causes issues with widgets in cache, we might need to remove caching or use a different pattern
+# @st.cache_resource
+# def get_manager():
+#     return stx.CookieManager()
+
+# cookie_manager = get_manager()
+cookie_manager = stx.CookieManager()
+
 def check_password():
     """Returns `True` if the user had the correct password."""
+    
+    # 1. Check for existing auth cookie
+    # We use a simple check: if the cookie value matches the password, they are logged in.
+    # In a real production app, you'd use a session token, but this is sufficient for this use case.
+    auth_cookie = cookie_manager.get(cookie="advocado_auth")
+    if auth_cookie == st.secrets["APP_PASSWORD"]:
+        st.session_state["password_correct"] = True
+        return True
 
     def password_entered():
         """Checks whether a password entered by the user is correct."""
-        if st.session_state["password"] == st.secrets["APP_PASSWORD"]:
+        # Check if the key exists in session state before accessing it
+        if "password" in st.session_state and st.session_state["password"] == st.secrets["APP_PASSWORD"]:
             st.session_state["password_correct"] = True
-            del st.session_state["password"]  # don't store password
+            # Set cookie to expire in 30 days
+            expires = datetime.datetime.now() + datetime.timedelta(days=30)
+            cookie_manager.set("advocado_auth", st.secrets["APP_PASSWORD"], expires_at=expires)
+            # Don't delete the key immediately to avoid KeyError in the callback
+            # del st.session_state["password"] 
         else:
             st.session_state["password_correct"] = False
 
@@ -60,6 +85,12 @@ if not check_password():
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+if "history_manager" not in st.session_state:
+    st.session_state.history_manager = ChatHistoryManager()
+
+if "current_conversation_id" not in st.session_state:
+    st.session_state.current_conversation_id = None
+
 if "rag" not in st.session_state:
     # Initialize engines only once
     try:
@@ -80,7 +111,66 @@ with st.sidebar:
     selected_lang = st.selectbox("Language / 言語", lang_options, index=0)
     t = TRANSLATIONS[selected_lang]
     
+    st.markdown("---")
+    
+    # Chat History
+    with st.expander("🕒 History", expanded=False):
+        col_new, col_manage = st.columns([3, 1])
+        with col_new:
+            if st.button("➕ New Chat", use_container_width=True):
+                st.session_state.messages = []
+                st.session_state.current_conversation_id = None
+                st.rerun()
+        
+        # Toggle for delete mode
+        with col_manage:
+            delete_mode = st.toggle("🗑️", key="delete_mode_toggle", help="Enable delete mode")
+
+        recent_convos = st.session_state.history_manager.get_recent_conversations()
+        
+        if not recent_convos:
+            st.caption("No recent chats.")
+        
+        for convo in recent_convos:
+            # Truncate title if too long
+            title = convo['title']
+            if len(title) > 25:
+                title = title[:25] + "..."
+            
+            if delete_mode:
+                col_name, col_del = st.columns([4, 1])
+                with col_name:
+                    st.text(f"📄 {title}")
+                with col_del:
+                    if st.button("🗑️", key=f"del_{convo['id']}", help="Delete this chat"):
+                        st.session_state.history_manager.delete_conversation(convo['id'])
+                        # If deleted current conversation, reset state
+                        if st.session_state.current_conversation_id == convo['id']:
+                            st.session_state.messages = []
+                            st.session_state.current_conversation_id = None
+                        st.rerun()
+            else:
+                # Normal mode: Click to load
+                # Highlight current conversation
+                type_prefix = "📂" if st.session_state.current_conversation_id == convo['id'] else "📄"
+                
+                if st.button(f"{type_prefix} {title}", key=convo['id'], use_container_width=True):
+                    # Load conversation
+                    st.session_state.current_conversation_id = convo['id']
+                    msgs = st.session_state.history_manager.get_messages(convo['id'])
+                    # Convert DB format to UI format
+                    st.session_state.messages = []
+                    for m in msgs:
+                        msg_obj = {"role": m["role"], "content": m["content"]}
+                        if m.get("sources"):
+                            msg_obj["sources"] = m["sources"]
+                        st.session_state.messages.append(msg_obj)
+                    st.rerun()
+
     # Navigation
+    # Use a consistent key for the radio button to avoid state reset issues, 
+    # but we need to handle the label change manually if we want it to persist across languages.
+    # Actually, simpler: just check against both English and Japanese strings.
     page = st.radio("Navigation", [t["nav_chat"], t["nav_docs"]])
     
     st.markdown("---")
@@ -90,7 +180,11 @@ with st.sidebar:
     else:
         st.error(t["system_offline"])
     
-    if page == t["nav_chat"]:
+    # Check if page matches EITHER English OR Japanese "Chat" string
+    # This ensures the sidebar renders even if the radio button state is slightly out of sync during a rerun
+    is_chat_page = (page == TRANSLATIONS["English"]["nav_chat"]) or (page == TRANSLATIONS["Japanese"]["nav_chat"])
+    
+    if is_chat_page:
         st.markdown("---")
         st.markdown(f"### {t['settings']}")
         
@@ -121,21 +215,26 @@ with st.sidebar:
         
         # Folder Filter (Tree View)
         # Force reload or check type to avoid stale state issues
-        if "folder_tree" not in st.session_state or not isinstance(st.session_state.folder_tree, list) or (st.session_state.folder_tree and not isinstance(st.session_state.folder_tree[0], dict)):
+        # Reload if not in session, or if empty list (retry), or if malformed
+        if "available_folders" not in st.session_state or not st.session_state.available_folders:
             # Try to load from JSON first (faster/better structure), fallback to DB
             json_path = "docs/search_by_folder/ingested_folders.json"
             if os.path.exists(json_path):
                 print(f"Loading folders from {json_path}")
                 folders = load_folders_from_json(json_path)
-                print(f"Loaded {len(folders)} folders. Building tree...")
-                st.session_state.folder_tree = build_folder_tree(folders)
-                print("Tree built successfully.")
+                print(f"Loaded {len(folders)} folders.")
+                st.session_state.available_folders = folders
             else:
                 # Fallback to DB fetch if JSON missing
                 print("JSON not found, fetching from DB")
                 folders = st.session_state.rag.get_available_folders()
-                st.session_state.folder_tree = build_folder_tree(folders)
-                print("Tree built from DB.")
+                st.session_state.available_folders = folders
+                print("Folders loaded from DB.")
+        
+        if st.button("🔄 Reload Folders"):
+            if "available_folders" in st.session_state:
+                del st.session_state.available_folders
+            st.rerun()
         
         st.markdown("Filter by Folder / フォルダでフィルタ")
         
@@ -149,14 +248,20 @@ with st.sidebar:
         </style>
         """, unsafe_allow_html=True)
         
-        # Changed expanded=True to help with rendering issues on load
-        with st.expander("📁 Select Folders", expanded=True):
-            if not st.session_state.folder_tree:
-                st.warning("No folders found.")
-            else:
-                return_val = tree_select(st.session_state.folder_tree, checked=[], expanded=[], key="folder_tree_select")
+        st.markdown("### Select Folders")
+        if not st.session_state.get("available_folders"):
+            st.warning("No folders found.")
+        else:
+            selected_folders = st.multiselect(
+                "Select folders to search in:",
+                options=st.session_state.available_folders,
+                default=[],
+                key="folder_multiselect"
+            )
             
-        selected_folders = return_val.get("checked", []) if 'return_val' in locals() else []
+        # selected_folders is already defined by the multiselect return value
+        if 'selected_folders' not in locals():
+            selected_folders = []
         
         match_count = st.slider(
             t["evidence_chunks"], 
@@ -234,6 +339,20 @@ elif page == t["nav_chat"]:
     if prompt := st.chat_input(t["chat_placeholder"]):
         # 1. User Message
         st.session_state.messages.append({"role": "user", "content": prompt})
+        
+        # Create conversation if needed
+        if not st.session_state.current_conversation_id:
+            # Generate title (simple for now)
+            title = prompt[:30] + "..." if len(prompt) > 30 else prompt
+            st.session_state.current_conversation_id = st.session_state.history_manager.create_conversation(title)
+            
+        # Save User Message
+        st.session_state.history_manager.add_message(
+            st.session_state.current_conversation_id, 
+            "user", 
+            prompt
+        )
+        
         with st.chat_message("user"):
             st.markdown(prompt)
 
@@ -307,6 +426,15 @@ elif page == t["nav_chat"]:
                 "content": response_text,
                 "sources": sources
             })
+            
+            # Save Assistant Message to DB
+            if st.session_state.current_conversation_id:
+                st.session_state.history_manager.add_message(
+                    st.session_state.current_conversation_id,
+                    "assistant",
+                    response_text,
+                    sources=sources
+                )
         
         # D. Display Sources (Immediate view)
         if sources:
