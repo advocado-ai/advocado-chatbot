@@ -84,24 +84,28 @@ class RAGEngine:
                 return []
 
             # 3. Fetch Google Drive links for these results
-            # The RPC doesn't return the google_drive_link column, so we fetch it separately
-            ids = [r['id'] for r in results]
-            try:
-                link_response = self.client.table('evidence_vectors') \
-                    .select('id, google_drive_link') \
-                    .in_('id', ids) \
-                    .execute()
-                
-                # Create a map of id -> link
-                link_map = {item['id']: item.get('google_drive_link') for item in link_response.data}
-                
-                # Merge into results
-                for r in results:
-                    r['google_drive_link'] = link_map.get(r['id'])
+            # If using V2, the link is already in the response (if we updated the RPC)
+            # But to be safe and backward compatible, we check if it's missing
+            
+            # Check if google_drive_link is missing in the first result
+            if results and 'google_drive_link' not in results[0]:
+                ids = [r['id'] for r in results]
+                try:
+                    link_response = self.client.table('evidence_vectors') \
+                        .select('id, google_drive_link') \
+                        .in_('id', ids) \
+                        .execute()
                     
-            except Exception as e:
-                print(f"Error fetching Google Drive links: {e}")
-                # Continue without links if this fails
+                    # Create a map of id -> link
+                    link_map = {item['id']: item.get('google_drive_link') for item in link_response.data}
+                    
+                    # Merge into results
+                    for r in results:
+                        r['google_drive_link'] = link_map.get(r['id'])
+                        
+                except Exception as e:
+                    print(f"Error fetching Google Drive links: {e}")
+                    # Continue without links if this fails
                 
             return results
         except Exception as e:

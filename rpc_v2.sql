@@ -11,7 +11,8 @@ returns table (
   file_path text,
   folder text,
   document_type text,
-  similarity float
+  similarity float,
+  google_drive_link text
 )
 language plpgsql
 as $$
@@ -23,7 +24,8 @@ begin
     evidence_vectors.file_path,
     evidence_vectors.folder,
     evidence_vectors.document_type,
-    1 - (evidence_vectors.embedding <=> query_embedding) as similarity
+    1 - (evidence_vectors.embedding <=> query_embedding) as similarity,
+    evidence_vectors.google_drive_link
   from evidence_vectors
   where 1 - (evidence_vectors.embedding <=> query_embedding) > match_threshold
   and (filter_document_type is null or evidence_vectors.document_type = filter_document_type)
