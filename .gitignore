@@ -41,3 +41,12 @@ venv.bak/
 # IDE settings
 .vscode/
 .idea/
+
+# Sensitive Data / Evidence Inventories
+docs/gdrive_inventory/
+docs/search_by_folder/
+src/import_package/data/
+*.json
+!package.json
+!tsconfig.json
+

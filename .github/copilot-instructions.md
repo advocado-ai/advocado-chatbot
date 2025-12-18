@@ -2,3 +2,5 @@
 
 - Always activate the conda environment `advocado-env` before installing packages or running python scripts.
   Command: `conda activate advocado-env`
+- This environment includes `git-filter-repo` for cleaning git history.
+

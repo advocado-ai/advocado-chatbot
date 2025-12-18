@@ -36,14 +36,8 @@ CHUNK_OVERLAP = 200
 
 # Mappings (Same as sync_storage.py)
 MAPPINGS = [
-    (
-        "/media/syslogd/ENCRYPTED-DATA/UserFiles/ADMIN-PC/n/Documents/my_projects/harassment/evidence-timeline",
-        "data/harassment/evidence-timeline"
-    ),
-    (
-        "/media/syslogd/ENCRYPTED-DATA/UserFiles/ADMIN-PC/n/Documents/my_projects/harassment/ppc_submission",
-        "data/harassment/ppc_submission"
-    )
+    # Example mapping: ("/local/path/to/data", "storage/prefix")
+    # ("/path/to/your/data", "data/evidence")
 ]
 
 def split_text(text: str, chunk_size: int, overlap: int) -> List[str]:

@@ -108,14 +108,11 @@ if __name__ == "__main__":
     # The storage_prefix should match the path structure in the vector DB (relative to project root)
     
     MAPPINGS = [
-        (
-            "/media/syslogd/ENCRYPTED-DATA/UserFiles/ADMIN-PC/n/Documents/my_projects/harassment/evidence-timeline",
-            "data/harassment/evidence-timeline"
-        ),
-        (
-            "/media/syslogd/ENCRYPTED-DATA/UserFiles/ADMIN-PC/n/Documents/my_projects/harassment/ppc_submission",
-            "data/harassment/ppc_submission"
-        )
+        # Example mapping:
+        # ("/local/path/to/data", "data/evidence")
     ]
     
-    sync_to_storage(MAPPINGS)
+    if not MAPPINGS:
+        print("No mappings configured. Please edit MAPPINGS in sync_storage.py")
+    else:
+        sync_to_storage(MAPPINGS)
