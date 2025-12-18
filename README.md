@@ -13,15 +13,15 @@ A Streamlit-based RAG (Retrieval Augmented Generation) application for legal cou
     export SUPABASE_URL="your_url"
     export SUPABASE_KEY="your_service_role_key" # Use SERVICE_ROLE key for writing to storage if anon doesn't have permission
     
-    python src/c2c_chatbot/sync_storage.py --dir data
+    python sync_storage.py --dir data
     ```
 
 ### 2. Streamlit Setup (Local)
 1.  Install dependencies:
     ```bash
-    pip install -r src/c2c_chatbot/requirements.txt
+    pip install -r requirements.txt
     ```
-2.  Create `.streamlit/secrets.toml` in the project root (or `src/c2c_chatbot/.streamlit/secrets.toml` if running from there, but usually root is better for paths).
+2.  Create `.streamlit/secrets.toml` in the project root.
     ```toml
     # App Security
     APP_PASSWORD = "your-secure-password-here"
@@ -35,7 +35,7 @@ A Streamlit-based RAG (Retrieval Augmented Generation) application for legal cou
     ```
 3.  Run the app:
     ```bash
-    streamlit run src/c2c_chatbot/app.py
+    streamlit run app.py
     ```
 
 ### 3. Deployment (Streamlit Cloud)

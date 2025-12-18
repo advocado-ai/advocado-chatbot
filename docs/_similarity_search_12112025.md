@@ -171,7 +171,7 @@ $$;
 -- Step 1: Find document ID
 SELECT id, SUBSTRING(content, 1, 100) as preview
 FROM evidence_vectors
-WHERE content ILIKE '%wish there were 3 more Nobu%'
+WHERE content ILIKE '%wish there were 3 more Employees%'
 LIMIT 5;
 
 -- Step 2: Use that ID to find similar documents

@@ -7,9 +7,9 @@ For example:
 - Search query: ??? (who is "he"? what is "that"?)
 
 **With history:**
-- Previous: "Tell me about Murakami's comments on the Vietnam team"
+- Previous: "Tell me about the Manager's comments on the Vietnam team"
 - User asks: "What did he say about that?"
-- Claude knows: search for "Murakami Vietnam team comments"
+- Claude knows: search for "Manager Vietnam team comments"
 
 **Implementation in Streamlit:**
 
