@@ -278,6 +278,16 @@ with st.sidebar:
             help=t["similarity_threshold_help"]
         )
         
+        # Advanced Search Options
+        st.markdown("#### Advanced Search")
+        search_mode = st.radio(
+            "Search Mode",
+            options=["Standard (Fast)", "Deep Multilingual (Slower, High Recall)"],
+            index=0,
+            help="Standard: Single optimized query. Deep: Searches with original, keywords, and translated queries."
+        )
+        use_deep_search = search_mode == "Deep Multilingual (Slower, High Recall)"
+        
         if st.button(t["clear_history"]):
             st.session_state.messages = []
             st.rerun()
@@ -367,37 +377,56 @@ elif page == t["nav_chat"]:
             # A. Optimize Query
             start_time = time.time()
             print(f"[{time.strftime('%X')}] Starting query optimization...")
-            optimized_query = st.session_state.llm.optimize_query(
-                prompt, 
-                recent_history, 
-                model_id=selected_model.api_id
-            )
-            print(f"[{time.strftime('%X')}] Optimization done ({time.time() - start_time:.2f}s): {optimized_query}")
             
-            if optimized_query != prompt:
-                st.caption(f"🔍 Searched for: {optimized_query}")
-            
-            # B. Retrieve Context
-            # Handle folder filtering
-            search_start = time.time()
-            print(f"[{time.strftime('%X')}] Starting vector search with {len(selected_folders)} folders selected...")
-            
-            if selected_folders:
-                # Optimized: Send all folders to RPC at once
+            if use_deep_search:
+                # Deep Search Mode
+                query_variants = st.session_state.llm.expand_query_multilingual(
+                    prompt, 
+                    recent_history, 
+                    model_id=selected_model.api_id
+                )
+                print(f"[{time.strftime('%X')}] Deep Search Variants: {query_variants}")
+                
+                with st.expander("🔍 Deep Search Details", expanded=False):
+                    st.write("Searching with:")
+                    st.json(query_variants)
+                
+                # B. Retrieve Context (Multilingual)
+                search_start = time.time()
+                results = st.session_state.rag.search_multilingual(
+                    query_variants,
+                    match_count=match_count,
+                    threshold=threshold,
+                    folder_filters=selected_folders if selected_folders else None
+                )
+                
+                # For the LLM generation, we use the ORIGINAL query intent but pass the rich context
+                # We can pass the 'translated' query as the 'optimized_query' for the LLM to understand context better if it was JP
+                optimized_query = query_variants.get('translated', prompt)
+
+            else:
+                # Standard Mode
+                optimized_query = st.session_state.llm.optimize_query(
+                    prompt, 
+                    recent_history, 
+                    model_id=selected_model.api_id
+                )
+                print(f"[{time.strftime('%X')}] Optimization done ({time.time() - start_time:.2f}s): {optimized_query}")
+                
+                if optimized_query != prompt:
+                    st.caption(f"🔍 Searched for: {optimized_query}")
+                
+                # B. Retrieve Context (Standard)
+                search_start = time.time()
+                print(f"[{time.strftime('%X')}] Starting vector search with {len(selected_folders)} folders selected...")
+                
                 results = st.session_state.rag.search(
                     optimized_query, 
                     match_count=match_count, 
                     threshold=threshold,
-                    folder_filters=selected_folders
+                    folder_filters=selected_folders if selected_folders else None
                 )
-                print(f"[{time.strftime('%X')}] Search completed in {time.time() - search_start:.2f}s. Found {len(results)} results.")
-            else:
-                # No filter
-                results = st.session_state.rag.search(
-                    optimized_query, 
-                    match_count=match_count, 
-                    threshold=threshold
-                )
+
             print(f"[{time.strftime('%X')}] Search complete ({time.time() - search_start:.2f}s). Found {len(results)} unique results.")
             
             if not results:

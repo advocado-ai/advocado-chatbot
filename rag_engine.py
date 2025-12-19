@@ -166,3 +166,62 @@ class RAGEngine:
         except Exception as e:
             st.error(f"Find similar error: {e}")
             return []
+
+    def search_multilingual(self, queries: Dict[str, str], match_count: int = 10, threshold: float = 0.3, folder_filters: List[str] = None) -> List[Dict[str, Any]]:
+        """
+        Executes parallel searches for multiple query variants and aggregates results using RRF.
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        # Helper function for a single search
+        def _single_search(query_text, query_type):
+            if not query_text:
+                return query_type, []
+            # Use a slightly lower threshold for keyword searches to ensure recall?
+            # Or keep it same. Let's keep it same for now.
+            results = self.search(query_text, match_count, threshold, folder_filters=folder_filters)
+            return query_type, results
+
+        # Run searches in parallel
+        search_results_map = {}
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            future_to_query = {
+                executor.submit(_single_search, q_text, q_type): q_type 
+                for q_type, q_text in queries.items()
+            }
+            
+            for future in as_completed(future_to_query):
+                try:
+                    q_type, results = future.result()
+                    search_results_map[q_type] = results
+                except Exception as e:
+                    print(f"Search error for {future_to_query[future]}: {e}")
+
+        # Aggregate results using Reciprocal Rank Fusion (RRF)
+        # RRF score = 1 / (k + rank)
+        k = 60
+        doc_scores = {}
+        doc_data = {}
+        
+        for q_type, results in search_results_map.items():
+            for rank, doc in enumerate(results):
+                doc_id = doc['id']
+                if doc_id not in doc_scores:
+                    doc_scores[doc_id] = 0
+                    doc_data[doc_id] = doc
+                    doc_data[doc_id]['found_by_methods'] = set()
+                
+                doc_scores[doc_id] += 1 / (k + rank + 1)
+                doc_data[doc_id]['found_by_methods'].add(q_type)
+
+        # Sort by score
+        sorted_ids = sorted(doc_scores.keys(), key=lambda x: doc_scores[x], reverse=True)
+        
+        final_results = []
+        for doc_id in sorted_ids[:match_count]:
+            doc = doc_data[doc_id]
+            # Convert set to list for JSON serialization/display
+            doc['found_by_methods'] = list(doc['found_by_methods'])
+            final_results.append(doc)
+            
+        return final_results

@@ -43,6 +43,7 @@ venv.bak/
 .idea/
 
 # Sensitive Data / Evidence Inventories
+docs/evidence_examples/
 docs/gdrive_inventory/
 docs/search_by_folder/
 src/import_package/data/

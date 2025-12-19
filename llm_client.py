@@ -61,6 +61,80 @@ Return ONLY the search query string. Do not add quotes or explanations."""
             print(f"Query optimization error: {e}")
             return query
 
+    def expand_query_multilingual(self, query: str, history: List[Dict[str, Any]], model_id: str = "claude-sonnet-4-5-20250929") -> Dict[str, str]:
+        """
+        Generates 4 variants of the search query for deep multilingual search.
+        Returns a dictionary with keys: 'original', 'original_keywords', 'translated', 'translated_keywords'.
+        """
+        if not self.client:
+            return {"original": query}
+
+        # Format history
+        history_text = ""
+        if history:
+            for msg in history:
+                role = msg["role"]
+                content = msg["content"]
+                history_text += f"{role.upper()}: {content}\n"
+        else:
+            history_text = "No previous conversation history."
+
+        prompt = f"""You are an expert legal search assistant. Your goal is to generate multiple search query variants to maximize recall in a bilingual (Japanese/English) evidence database.
+
+Conversation History:
+{history_text}
+
+User's Question: {query}
+
+Task:
+1. Analyze the User's Question and History to understand the core intent and entities.
+2. Generate 4 specific search query variants:
+   - "original": The user's intent expressed in the ORIGINAL language (e.g., Japanese). Resolve pronouns.
+   - "original_keywords": Key search terms extracted from the original query (space-separated).
+   - "translated": The user's intent TRANSLATED into the TARGET language (if JP -> EN, if EN -> JP).
+   - "translated_keywords": Key search terms extracted from the translated query (space-separated).
+
+Output Format:
+Return ONLY a valid JSON object with these 4 keys. Do not add markdown formatting or explanations.
+{{
+  "original": "...",
+  "original_keywords": "...",
+  "translated": "...",
+  "translated_keywords": "..."
+}}
+"""
+        try:
+            message = self.client.messages.create(
+                model=model_id,
+                max_tokens=300,
+                temperature=0.0,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            response_text = message.content[0].text.strip()
+            
+            # Clean up potential markdown code blocks if the model adds them
+            if response_text.startswith("```json"):
+                response_text = response_text[7:]
+            if response_text.startswith("```"):
+                response_text = response_text[3:]
+            if response_text.endswith("```"):
+                response_text = response_text[:-3]
+                
+            import json
+            return json.loads(response_text.strip())
+            
+        except Exception as e:
+            print(f"Multilingual expansion error: {e}")
+            # Fallback
+            return {
+                "original": query,
+                "original_keywords": query,
+                "translated": query,
+                "translated_keywords": query
+            }
+
     def generate_response(self, query: str, context_chunks: List[Dict[str, Any]], history: List[Dict[str, Any]] = None, model_id: str = "claude-sonnet-4-5-20250929") -> str:
         """
         Generates a response based on the query and retrieved context.
