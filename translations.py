@@ -47,7 +47,27 @@ TRANSLATIONS = {
         "docs_security_title": "Security",
         "docs_security_text": """*   This application is password protected.
 *   Evidence files are stored in a private Supabase bucket.
-*   Links to files are temporary (signed URLs) and expire after 1 hour."""
+*   Links to files are temporary (signed URLs) and expire after 1 hour.""",
+        "password_incorrect": "😕 Password incorrect",
+        "failed_to_initialize": "Failed to initialize application",
+        "history": "History",
+        "new_chat": "New Chat",
+        "delete_this_chat": "Delete this chat",
+        "enable_delete_mode": "Enable delete mode",
+        "no_recent_chats": "No recent chats.",
+        "navigation": "Navigation",
+        "reload_folders": "Reload Folders",
+        "filter_by_folder": "Filter by Folder",
+        "select_folders": "Select Folders",
+        "no_folders_found": "No folders found.",
+        "select_folders_to_search": "Select folders to search in:",
+        "advanced_search": "Advanced Search",
+        "search_mode": "Search Mode",
+        "standard_fast": "Standard (Fast)",
+        "deep_multilingual": "Deep Multilingual (Slower, High Recall)",
+        "search_mode_help": "Standard: Single optimized query. Deep: Searches with original, keywords, and translated queries.",
+        "deep_search_details": "Deep Search Details",
+        "searching_with": "Searching with:"
     },
     "Japanese": {
         "nav_chat": "チャットアシスタント",
@@ -97,6 +117,26 @@ TRANSLATIONS = {
         "docs_security_title": "セキュリティ",
         "docs_security_text": """*   このアプリケーションはパスワードで保護されています。
 *   証拠ファイルはプライベートなSupabaseバケットに保存されています。
-*   ファイルへのリンクは一時的（署名付きURL）で、1時間後に期限切れになります。"""
+*   ファイルへのリンクは一時的（署名付きURL）で、1時間後に期限切れになります。""",
+        "password_incorrect": "😕 パスワードが正しくありません",
+        "failed_to_initialize": "アプリケーションの初期化に失敗しました",
+        "history": "履歴",
+        "new_chat": "新しいチャット",
+        "delete_this_chat": "このチャットを削除",
+        "enable_delete_mode": "削除モードを有効化",
+        "no_recent_chats": "最近のチャットはありません。",
+        "navigation": "ナビゲーション",
+        "reload_folders": "フォルダを再読み込み",
+        "filter_by_folder": "フォルダでフィルタ",
+        "select_folders": "フォルダを選択",
+        "no_folders_found": "フォルダが見つかりません。",
+        "select_folders_to_search": "検索するフォルダを選択:",
+        "advanced_search": "詳細検索",
+        "search_mode": "検索モード",
+        "standard_fast": "標準（高速）",
+        "deep_multilingual": "深層多言語（低速、高再現率）",
+        "search_mode_help": "標準：単一の最適化されたクエリ。深層：元のクエリ、キーワード、翻訳されたクエリで検索します。",
+        "deep_search_details": "深層検索の詳細",
+        "searching_with": "次の条件で検索中:"
     }
 }

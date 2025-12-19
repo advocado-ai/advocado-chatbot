@@ -70,7 +70,9 @@ def check_password():
             on_change=password_entered, 
             key="password"
         )
-        st.error("😕 Password incorrect")
+        # Get translations for error message
+        t_temp = TRANSLATIONS.get(st.session_state.get('language', 'English'), TRANSLATIONS['English'])
+        st.error(t_temp["password_incorrect"])
         return False
     else:
         # Password correct.
@@ -99,7 +101,8 @@ if "rag" not in st.session_state:
         st.session_state.llm = LLMClient()
         st.session_state.initialized = True
     except Exception as e:
-        st.error(f"Failed to initialize application: {e}")
+        t_temp = TRANSLATIONS.get(st.session_state.get('language', 'English'), TRANSLATIONS['English'])
+        st.error(f"{t_temp['failed_to_initialize']}: {e}")
         st.session_state.initialized = False
 
 # Sidebar
@@ -114,22 +117,22 @@ with st.sidebar:
     st.markdown("---")
     
     # Chat History
-    with st.expander("🕒 History", expanded=False):
+    with st.expander(f"🕒 {t['history']}", expanded=False):
         col_new, col_manage = st.columns([3, 1])
         with col_new:
-            if st.button("➕ New Chat", use_container_width=True):
+            if st.button(f"➕ {t['new_chat']}", use_container_width=True):
                 st.session_state.messages = []
                 st.session_state.current_conversation_id = None
                 st.rerun()
         
         # Toggle for delete mode
         with col_manage:
-            delete_mode = st.toggle("🗑️", key="delete_mode_toggle", help="Enable delete mode")
+            delete_mode = st.toggle("🗑️", key="delete_mode_toggle", help=t["enable_delete_mode"])
 
         recent_convos = st.session_state.history_manager.get_recent_conversations()
         
         if not recent_convos:
-            st.caption("No recent chats.")
+            st.caption(t["no_recent_chats"])
         
         for convo in recent_convos:
             # Truncate title if too long
@@ -142,7 +145,7 @@ with st.sidebar:
                 with col_name:
                     st.text(f"📄 {title}")
                 with col_del:
-                    if st.button("🗑️", key=f"del_{convo['id']}", help="Delete this chat"):
+                    if st.button("🗑️", key=f"del_{convo['id']}", help=t["delete_this_chat"]):
                         st.session_state.history_manager.delete_conversation(convo['id'])
                         # If deleted current conversation, reset state
                         if st.session_state.current_conversation_id == convo['id']:
@@ -171,7 +174,7 @@ with st.sidebar:
     # Use a consistent key for the radio button to avoid state reset issues, 
     # but we need to handle the label change manually if we want it to persist across languages.
     # Actually, simpler: just check against both English and Japanese strings.
-    page = st.radio("Navigation", [t["nav_chat"], t["nav_docs"]])
+    page = st.radio(t["navigation"], [t["nav_chat"], t["nav_docs"]])
     
     st.markdown("---")
     st.markdown(f"**{t['system_online']}**" if st.session_state.get("initialized") else f"**{t['system_offline']}**")
@@ -231,12 +234,12 @@ with st.sidebar:
                 st.session_state.available_folders = folders
                 print("Folders loaded from DB.")
         
-        if st.button("🔄 Reload Folders"):
+        if st.button(f"🔄 {t['reload_folders']}"):
             if "available_folders" in st.session_state:
                 del st.session_state.available_folders
             st.rerun()
         
-        st.markdown("Filter by Folder / フォルダでフィルタ")
+        st.markdown(t["filter_by_folder"])
         
         # Sidebar Width Adjustment
         st.markdown("""
@@ -248,12 +251,12 @@ with st.sidebar:
         </style>
         """, unsafe_allow_html=True)
         
-        st.markdown("### Select Folders")
+        st.markdown(f"### {t['select_folders']}")
         if not st.session_state.get("available_folders"):
-            st.warning("No folders found.")
+            st.warning(t["no_folders_found"])
         else:
             selected_folders = st.multiselect(
-                "Select folders to search in:",
+                t["select_folders_to_search"],
                 options=st.session_state.available_folders,
                 default=[],
                 key="folder_multiselect"
@@ -279,14 +282,14 @@ with st.sidebar:
         )
         
         # Advanced Search Options
-        st.markdown("#### Advanced Search")
+        st.markdown(f"#### {t['advanced_search']}")
         search_mode = st.radio(
-            "Search Mode",
-            options=["Standard (Fast)", "Deep Multilingual (Slower, High Recall)"],
+            t["search_mode"],
+            options=[t["standard_fast"], t["deep_multilingual"]],
             index=0,
-            help="Standard: Single optimized query. Deep: Searches with original, keywords, and translated queries."
+            help=t["search_mode_help"]
         )
-        use_deep_search = search_mode == "Deep Multilingual (Slower, High Recall)"
+        use_deep_search = search_mode == t["deep_multilingual"]
         
         if st.button(t["clear_history"]):
             st.session_state.messages = []
@@ -387,8 +390,8 @@ elif page == t["nav_chat"]:
                 )
                 print(f"[{time.strftime('%X')}] Deep Search Variants: {query_variants}")
                 
-                with st.expander("🔍 Deep Search Details", expanded=False):
-                    st.write("Searching with:")
+                with st.expander(f"🔍 {t['deep_search_details']}", expanded=False):
+                    st.write(f"{t['searching_with']}:")
                     st.json(query_variants)
                 
                 # B. Retrieve Context (Multilingual)
