@@ -23,8 +23,9 @@ class RAGEngine:
     @st.cache_resource
     def _load_model(_self):
         """Load the sentence transformer model."""
-        # Using the same model as ingestion to ensure compatibility
-        return SentenceTransformer('all-MiniLM-L6-v2')
+        # Using E5-Base multilingual model (768 dimensions)
+        # Supports excellent multilingual retrieval for Japanese/English
+        return SentenceTransformer('intfloat/multilingual-e5-base')
 
     def get_available_folders(self) -> List[str]:
         """
@@ -50,8 +51,8 @@ class RAGEngine:
         """
         Search the vector database for relevant chunks.
         """
-        # 1. Generate embedding
-        query_embedding = self.model.encode(query).tolist()
+        # 1. Generate embedding with E5-Base query prefix
+        query_embedding = self.model.encode(f"query: {query}").tolist()
         
         # 2. Query Supabase
         if folder_filters:

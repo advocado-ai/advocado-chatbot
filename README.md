@@ -46,11 +46,19 @@ A Streamlit-based RAG (Retrieval Augmented Generation) application for legal cou
 5.  Deploy!
 
 ## Architecture
-*   **`app.py`**: The UI.
-*   **`rag_engine.py`**: Vector search logic.
+*   **`app.py`**: The UI with Japanese/English language support and deep multilingual search.
+*   **`rag_engine.py`**: Vector search logic using E5-Base multilingual model (768 dimensions).
 *   **`storage_client.py`**: Generates secure links to files.
-*   **`llm_client.py`**: Generates answers using Anthropic Claude.
+*   **`llm_client.py`**: Generates answers using Anthropic Claude with multilingual query expansion.
 *   **`models.py`**: Configuration for available LLM models.
+*   **`validate_dimensions.py`**: Pre-deployment validation script for model/database compatibility.
+
+## Embedding Model
+The application uses **intfloat/multilingual-e5-base** for vector embeddings:
+*   **Dimensions**: 768 (requires ~1.1GB RAM)
+*   **Languages**: Excellent support for Japanese and English
+*   **Query Prefix**: Automatically adds `"query: "` prefix for optimal retrieval
+*   **Database**: Requires HNSW index on 20K+ vectors for acceptable performance
 
 ## Supported Models
 The application supports the following Anthropic models (configurable via UI):

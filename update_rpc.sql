@@ -1,6 +1,6 @@
 -- Update the RPC function to support folder filtering
 create or replace function match_evidence_vectors (
-  query_embedding vector(384),
+  query_embedding vector(768),
   match_threshold float,
   match_count int,
   filter_document_type text default null,

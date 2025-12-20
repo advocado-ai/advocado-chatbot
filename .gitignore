@@ -42,6 +42,13 @@ venv.bak/
 .vscode/
 .idea/
 
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
 # Sensitive Data / Evidence Inventories
 docs/evidence_examples/
 docs/gdrive_inventory/

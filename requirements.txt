@@ -1,6 +1,6 @@
 streamlit
 supabase
-sentence-transformers
+sentence-transformers>=2.2.2
 anthropic
 python-dotenv
 watchdog

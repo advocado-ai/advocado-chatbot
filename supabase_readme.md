@@ -9,7 +9,7 @@ Stores the embeddings and metadata for the evidence documents.
 | `id` | `bigint` | Primary Key |
 | `created_at` | `timestamptz` | Creation timestamp |
 | `content` | `text` | The text content of the chunk |
-| `embedding` | `vector(384)` | The embedding vector (all-MiniLM-L6-v2) |
+| `embedding` | `vector(768)` | The embedding vector (intfloat/multilingual-e5-base) |
 | `file_path` | `text` | Path to the file in Supabase Storage (e.g., `data/harassment/...`) |
 | `file_name` | `text` | Name of the file |
 | `folder` | `text` | Folder containing the file |
@@ -24,7 +24,7 @@ Stores the embeddings and metadata for the evidence documents.
 Performs a similarity search using cosine distance.
 
 **Parameters:**
-- `query_embedding`: `vector(384)`
+- `query_embedding`: `vector(768)`
 - `match_threshold`: `float`
 - `match_count`: `int`
 - `filter_document_type`: `text` (optional)

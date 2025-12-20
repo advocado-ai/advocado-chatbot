@@ -66,7 +66,64 @@ Streamlit Cloud is the easiest way to host this app securely.
 6.  Paste the contents of your local `.streamlit/secrets.toml` into the text box.
 7.  Click **Deploy**.
 
-## 4. Security
+## 4. Database Setup & Migration
+
+### E5-Base Embedding Model Requirements
+
+The application uses the **E5-Base multilingual embedding model** for superior Japanese/English retrieval:
+- Model: `intfloat/multilingual-e5-base`
+- Vector dimensions: **768** (not 384)
+- Memory requirement: ~1.1GB for model
+- Query prefix: `"query: "` for search queries
+
+### Database Prerequisites
+
+**CRITICAL**: Before deploying, ensure your Supabase database has:
+
+1. **768-Dimensional Vectors**
+   - Run the ingestion script with E5-Base model to populate vectors
+   - All vectors in `evidence_vectors` table must be 768 dimensions
+
+2. **Updated RPC Function**
+   - Execute `rpc_v2.sql` in Supabase SQL Editor
+   - This updates `match_evidence_vectors_v2` to accept `vector(768)`
+   
+   ```sql
+   -- From rpc_v2.sql
+   create or replace function match_evidence_vectors_v2 (
+     query_embedding vector(768),  -- Must be 768!
+     ...
+   ```
+
+3. **HNSW Vector Index** (Required for Performance)
+   - Execute `create_vector_index.sql` in Supabase SQL Editor
+   - Without this index, queries will timeout on 20K+ vectors
+   
+   ```sql
+   -- From create_vector_index.sql
+   CREATE INDEX evidence_vectors_embedding_idx 
+   ON evidence_vectors USING hnsw (embedding vector_cosine_ops)
+   WITH (m = 16, ef_construction = 64);
+   ```
+
+### Pre-Deployment Validation
+
+Run the validation script before deploying:
+
+```bash
+conda activate advocado-env
+python validate_dimensions.py
+```
+
+This checks:
+- Model produces 768-dimensional embeddings ✓
+- Database contains 768-dimensional vectors ✓
+- RPC function accepts 768-dimensional inputs ✓
+- HNSW index exists (optional but recommended) ⚠
+
+**Do not deploy if validation fails** - dimension mismatches will cause all searches to fail.
+
+## 5. Security
 
 *   **App Password**: The app is protected by a password defined in `secrets.toml` (`APP_PASSWORD`).
 *   **Private Repo**: Keep the GitHub repo private.

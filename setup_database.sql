@@ -6,12 +6,12 @@ create table if not exists documents (
   id bigserial primary key,
   content text,
   metadata jsonb,
-  embedding vector(384) -- 384 is the dimension for all-MiniLM-L6-v2
+  embedding vector(768) -- 768 dimensions for intfloat/multilingual-e5-base
 );
 
 -- Create a function to search for documents
 create or replace function match_documents (
-  query_embedding vector(384),
+  query_embedding vector(768),
   match_threshold float,
   match_count int
 )

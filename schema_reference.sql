@@ -8,7 +8,7 @@ create table if not exists evidence_vectors (
   folder text,
   document_type text,
   google_drive_link text,
-  embedding vector(384),
+  embedding vector(768),  -- E5-Base multilingual model
   created_at timestamptz default now()
 );
 
