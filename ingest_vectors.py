@@ -30,7 +30,7 @@ if not os.getenv("SUPABASE_URL"):
 # Configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
-MODEL_NAME = 'all-MiniLM-L6-v2'
+MODEL_NAME = 'intfloat/multilingual-e5-base'  # 768 dimensions
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
 

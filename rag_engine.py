@@ -51,8 +51,9 @@ class RAGEngine:
         """
         Search the vector database for relevant chunks.
         """
-        # 1. Generate embedding with E5-Base query prefix
-        query_embedding = self.model.encode(f"query: {query}").tolist()
+        # 1. Generate embedding (temporarily without prefix to match database)
+        # TODO: Add "query: " prefix back after re-ingesting DB with "passage: " prefix
+        query_embedding = self.model.encode(query).tolist()
         
         # 2. Query Supabase
         if folder_filters:
