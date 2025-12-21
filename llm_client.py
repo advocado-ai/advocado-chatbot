@@ -1,6 +1,7 @@
 import streamlit as st
 from anthropic import Anthropic
 from typing import List, Dict, Any
+import re
 
 class LLMClient:
     """
@@ -164,12 +165,13 @@ Return ONLY a valid JSON object with these 5 keys. Do not add markdown formattin
                 "date_filter": None
             }
 
-    def generate_response(self, query: str, context_chunks: List[Dict[str, Any]], history: List[Dict[str, Any]] = None, model_id: str = "claude-sonnet-4-5-20250929") -> str:
+    def generate_response(self, query: str, context_chunks: List[Dict[str, Any]], history: List[Dict[str, Any]] = None, model_id: str = "claude-sonnet-4-5-20250929") -> tuple[str, Dict[str, str]]:
         """
         Generates a response based on the query and retrieved context.
+        Returns: (answer_text, dictionary_of_previews)
         """
         if not self.client:
-            return "Error: LLM client not initialized."
+            return "Error: LLM client not initialized.", {}
 
         # 1. Prepare Context
         context_text = ""
@@ -188,6 +190,19 @@ Rules:
 3. BASE your answer STRICTLY on the provided context. If the answer is not in the context, say "I cannot find evidence for that in the current database."
 4. CITE your sources. When you state a fact, reference the Source ID or File Name (e.g., "According to email-sensei.md...").
 5. Be professional, objective, and concise.
+
+OUTPUT FORMAT:
+You must output your response in XML format:
+<root>
+  <answer>
+    [Your main response goes here. Use Markdown formatting within this tag.]
+  </answer>
+  <previews>
+    <preview index="1">[A 1-sentence summary/translation of Source 1 in the target language]</preview>
+    <preview index="2">[A 1-sentence summary/translation of Source 2 in the target language]</preview>
+    ...
+  </previews>
+</root>
 """
 
         # 3. Prepare Messages with History
@@ -208,11 +223,34 @@ Rules:
         try:
             message = self.client.messages.create(
                 model=model_id,
-                max_tokens=1024,
+                max_tokens=2000,
                 temperature=0.2,
                 system=system_prompt,
                 messages=final_messages
             )
-            return message.content[0].text
+            raw_response = message.content[0].text
+            
+            # Parse XML
+            # Extract Answer
+            answer_match = re.search(r'<answer>(.*?)</answer>', raw_response, re.DOTALL)
+            if answer_match:
+                answer_text = answer_match.group(1).strip()
+            else:
+                # Fallback: try to find text before <previews> or just return everything
+                if "<previews>" in raw_response:
+                    answer_text = raw_response.split("<previews>")[0].strip()
+                else:
+                    answer_text = raw_response
+            
+            # Extract Previews
+            previews = {}
+            preview_matches = re.finditer(r'<preview index="(\d+)">(.*?)</preview>', raw_response, re.DOTALL)
+            for match in preview_matches:
+                idx = match.group(1)
+                text = match.group(2).strip()
+                previews[idx] = text
+                
+            return answer_text, previews
+            
         except Exception as e:
-            return f"Error generating response: {e}"
+            return f"Error generating response: {e}", {}

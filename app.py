@@ -362,10 +362,13 @@ elif page == t["nav_chat"]:
                         display_name = os.path.basename(display_path)
                         
                         # Content Preview
-                        content = source.get('content', '')
-                        if not content and 'all_chunks' in source and source['all_chunks']:
-                             content = source['all_chunks'][0].get('content', '')
-                        preview = content[:200].replace('\n', ' ') + "..." if content else ""
+                        if 'translated_preview' in source:
+                            preview = source['translated_preview']
+                        else:
+                            content = source.get('content', '')
+                            if not content and 'all_chunks' in source and source['all_chunks']:
+                                 content = source['all_chunks'][0].get('content', '')
+                            preview = content[:200].replace('\n', ' ') + "..." if content else ""
                         
                         # Check for Google Drive link first
                         url = source.get('google_drive_link')
@@ -506,12 +509,21 @@ elif page == t["nav_chat"]:
                 gen_start = time.time()
                 print(f"[{time.strftime('%X')}] Generating answer...")
                 message_placeholder.markdown(t["analyzing"].format(model=selected_model.name))
-                response_text = st.session_state.llm.generate_response(
+                
+                # UPDATED CALL: Unpack tuple
+                response_text, previews = st.session_state.llm.generate_response(
                     prompt, 
                     results, 
                     history=recent_history,
                     model_id=selected_model.api_id
                 )
+                
+                # Inject previews into results
+                for i, res in enumerate(results):
+                    idx = str(i + 1)
+                    if idx in previews:
+                        res['translated_preview'] = previews[idx]
+                
                 print(f"[{time.strftime('%X')}] Generation complete ({time.time() - gen_start:.2f}s)")
                 sources = results
 
@@ -552,12 +564,16 @@ elif page == t["nav_chat"]:
                     display_name = os.path.basename(display_path)
                     
                     # CONTENT PREVIEW
-                    content = source.get('content', '')
-                    # If aggregated, might be in 'all_chunks'
-                    if not content and 'all_chunks' in source and source['all_chunks']:
-                         content = source['all_chunks'][0].get('content', '')
-                    
-                    preview = content[:200].replace('\n', ' ') + "..." if content else ""
+                    # Check for translated preview first
+                    if 'translated_preview' in source:
+                        preview = source['translated_preview']
+                    else:
+                        content = source.get('content', '')
+                        # If aggregated, might be in 'all_chunks'
+                        if not content and 'all_chunks' in source and source['all_chunks']:
+                             content = source['all_chunks'][0].get('content', '')
+                        
+                        preview = content[:200].replace('\n', ' ') + "..." if content else ""
 
                     # Check for Google Drive link first
                     url = source.get('google_drive_link')
