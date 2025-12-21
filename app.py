@@ -11,6 +11,28 @@ from streamlit_tree_select import tree_select
 from tree_utils import build_folder_tree, load_folders_from_json
 from chat_history import ChatHistoryManager
 import os
+from pathlib import Path
+
+# Helper Functions
+def convert_to_pdf_path(file_path: str) -> str:
+    """
+    Convert markdown file paths to their PDF equivalents.
+    - .md files: xxx/file.md → xxx/pdf/file.pdf
+    - .txt files: keep as-is (no PDF version)
+    
+    Args:
+        file_path: Original file path from database (e.g., "data/.../file.md")
+    
+    Returns:
+        Converted path if .md, otherwise original path
+    """
+    if file_path.endswith('.md'):
+        path_obj = Path(file_path)
+        # Insert 'pdf/' directory before filename and change extension
+        pdf_path = path_obj.parent / 'pdf' / path_obj.with_suffix('.pdf').name
+        return str(pdf_path)
+    # Keep .txt and other formats as-is
+    return file_path
 
 # Page Config
 st.set_page_config(
@@ -333,15 +355,18 @@ elif page == t["nav_chat"]:
                         file_path = source['file_path']
                         similarity = source['similarity']
                         
+                        # Convert to PDF path for display
+                        display_path = convert_to_pdf_path(file_path)
+                        
                         # Check for Google Drive link first
                         url = source.get('google_drive_link')
                         if not url:
-                            # Fallback to signed URL
-                            url = st.session_state.storage.get_signed_url(file_path)
+                            # Fallback to signed URL (use converted path)
+                            url = st.session_state.storage.get_signed_url(display_path)
                         
                         col1, col2 = st.columns([3, 1])
                         with col1:
-                            st.markdown(f"**{i+1}. {file_path}** (Relevance: {similarity:.2f})")
+                            st.markdown(f"**{i+1}. {display_path}** (Relevance: {similarity:.2f})")
                         with col2:
                             if url:
                                 st.markdown(f"[{t['open_file']}]({url})")
@@ -476,13 +501,16 @@ elif page == t["nav_chat"]:
                     similarity = source['similarity']
                     doc_id = source.get('id') # Ensure your RAG search returns 'id'
                     
+                    # Convert to PDF path for display
+                    display_path = convert_to_pdf_path(file_path)
+                    
                     # Check for Google Drive link first
                     url = source.get('google_drive_link')
                     if not url:
-                        # Fallback to signed URL
-                        url = st.session_state.storage.get_signed_url(file_path)
+                        # Fallback to signed URL (use converted path)
+                        url = st.session_state.storage.get_signed_url(display_path)
                     
-                    st.markdown(f"**{i+1}. {file_path}** ({similarity:.2f})")
+                    st.markdown(f"**{i+1}. {display_path}** ({similarity:.2f})")
                     
                     col_a, col_b = st.columns([1, 1])
                     with col_a:
@@ -490,7 +518,7 @@ elif page == t["nav_chat"]:
                             st.markdown(f"[{t['open_file']}]({url})")
                         else:
                             # Show debug info in tooltip
-                            debug_msg = st.session_state.storage.get_debug_info(file_path)
+                            debug_msg = st.session_state.storage.get_debug_info(display_path)
                             st.markdown(f"*{t['link_unavailable']}*", help=debug_msg)
                     with col_b:
                         if doc_id:
