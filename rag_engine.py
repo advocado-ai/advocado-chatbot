@@ -122,6 +122,40 @@ class RAGEngine:
             st.error(f"Database search error: {e}")
             return []
 
+    def search_keyword(self, query: str, match_count: int = 10) -> List[Dict[str, Any]]:
+        """
+        Perform a keyword search using pg_trgm in Supabase.
+        """
+        try:
+            params = {
+                'query_text': query,
+                'match_count': match_count
+            }
+            response = self.client.rpc('kw_match_documents', params).execute()
+            results = response.data
+            
+            if not results:
+                return []
+                
+            # Fetch Google Drive links (same logic as vector search)
+            if results and 'google_drive_link' not in results[0]:
+                ids = [r['id'] for r in results]
+                try:
+                    link_response = self.client.table('evidence_vectors') \
+                        .select('id, google_drive_link') \
+                        .in_('id', ids) \
+                        .execute()
+                    link_map = {item['id']: item.get('google_drive_link') for item in link_response.data}
+                    for r in results:
+                        r['google_drive_link'] = link_map.get(r['id'])
+                except Exception as e:
+                    print(f"Error fetching Google Drive links: {e}")
+            
+            return results
+        except Exception as e:
+            print(f"Keyword search error: {e}")
+            return []
+
     def find_similar(self, document_id: int, match_count: int = 5) -> List[Dict[str, Any]]:
         """
         Find documents similar to an existing document ID.
@@ -234,10 +268,12 @@ class RAGEngine:
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         # Retrieve MORE chunks initially for better document-level aggregation
-        # We'll retrieve 5x the requested amount, then aggregate and return top match_count
-        initial_match_count = match_count * 5  # e.g., 50 if user wants 10
+        # We'll retrieve 15x the requested amount (Wide Net Strategy)
+        # This ensures that for a 60-chunk document, we have a statistical chance 
+        # of catching enough chunks to form a high document score.
+        initial_match_count = match_count * 15  # e.g., 150 if user wants 10
         
-        debug_log(f"Starting multilingual search: {len(queries)} variants, retrieving {initial_match_count} chunks each")
+        debug_log(f"Starting multilingual search: {len(queries)} variants + keyword search, retrieving {initial_match_count} chunks each")
         
         # Helper function for a single search
         def _single_search(query_text, query_type):
@@ -249,13 +285,29 @@ class RAGEngine:
             debug_log(f"  → Found {len(results)} results for '{query_type}'")
             return query_type, results
 
+        # Helper function for keyword search
+        def _single_keyword_search(query_text, query_type):
+            if not query_text:
+                return query_type, []
+            debug_log(f"Searching keyword variant '{query_type}': {query_text}")
+            results = self.search_keyword(query_text, initial_match_count)
+            debug_log(f"  → Found {len(results)} keyword results for '{query_type}'")
+            return query_type, results
+
         # Run searches in parallel
         search_results_map = {}
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=6) as executor:
             future_to_query = {
                 executor.submit(_single_search, q_text, q_type): q_type 
                 for q_type, q_text in queries.items()
             }
+            
+            # Add keyword searches
+            if 'original' in queries:
+                future_to_query[executor.submit(_single_keyword_search, queries['original'], 'keyword_original')] = 'keyword_original'
+            
+            if 'translated' in queries:
+                future_to_query[executor.submit(_single_keyword_search, queries['translated'], 'keyword_translated')] = 'keyword_translated'
             
             for future in as_completed(future_to_query):
                 try:
@@ -266,8 +318,9 @@ class RAGEngine:
 
         # Aggregate results using Reciprocal Rank Fusion (RRF)
         # RRF score = 1 / (k + rank)
+        # Lower k (e.g., 10) rewards high rankings more aggressively
         debug_log(f"Applying RRF aggregation across {len(search_results_map)} query variants")
-        k = 60
+        k = 10
         doc_scores = {}
         doc_data = {}
         
