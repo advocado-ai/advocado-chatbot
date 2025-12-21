@@ -169,19 +169,69 @@ class RAGEngine:
             st.error(f"Find similar error: {e}")
             return []
 
+    def aggregate_by_document(self, chunks: List[Dict[str, Any]], top_k: int = 10) -> List[Dict[str, Any]]:
+        """
+        Aggregate chunks by document and re-rank using Multi-Chunk Boosting.
+        Documents with multiple high-scoring chunks are rewarded, but normalized by sqrt(N) 
+        to prevent very long documents from dominating.
+        
+        Args:
+            chunks: List of chunk results from vector search
+            top_k: Number of top documents to return
+            
+        Returns:
+            List of top documents with their best chunk as representative,
+            enriched with doc_score and chunk_count metadata
+        """
+        import math
+        from collections import defaultdict
+        
+        doc_chunks = defaultdict(list)
+        
+        # Group chunks by document
+        for chunk in chunks:
+            file_path = chunk['file_path']
+            doc_chunks[file_path].append(chunk)
+        
+        # Calculate document scores using Multi-Chunk Boosting
+        doc_scores = []
+        for file_path, chunks_list in doc_chunks.items():
+            # Sum similarities and normalize by sqrt(count)
+            # This rewards multi-chunk docs without over-boosting very long docs
+            similarities = [c['similarity'] for c in chunks_list]
+            doc_score = sum(similarities) / math.sqrt(len(similarities))
+            
+            # Keep the highest-scoring chunk as representative
+            best_chunk = max(chunks_list, key=lambda x: x['similarity'])
+            
+            # Enrich with aggregation metadata
+            best_chunk['doc_score'] = doc_score
+            best_chunk['chunk_count'] = len(chunks_list)
+            
+            doc_scores.append(best_chunk)
+        
+        # Sort by document score (descending)
+        doc_scores.sort(key=lambda x: x['doc_score'], reverse=True)
+        
+        return doc_scores[:top_k]
+
     def search_multilingual(self, queries: Dict[str, str], match_count: int = 10, threshold: float = 0.3, folder_filters: List[str] = None) -> List[Dict[str, Any]]:
         """
         Executes parallel searches for multiple query variants and aggregates results using RRF.
+        Then applies document-level aggregation to surface comprehensive multi-chunk documents.
         """
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
+        # Retrieve MORE chunks initially for better document-level aggregation
+        # We'll retrieve 5x the requested amount, then aggregate and return top match_count
+        initial_match_count = match_count * 5  # e.g., 50 if user wants 10
+        
         # Helper function for a single search
         def _single_search(query_text, query_type):
             if not query_text:
                 return query_type, []
-            # Use a slightly lower threshold for keyword searches to ensure recall?
-            # Or keep it same. Let's keep it same for now.
-            results = self.search(query_text, match_count, threshold, folder_filters=folder_filters)
+            # Use expanded retrieval for better recall
+            results = self.search(query_text, initial_match_count, threshold, folder_filters=folder_filters)
             return query_type, results
 
         # Run searches in parallel
@@ -216,14 +266,19 @@ class RAGEngine:
                 doc_scores[doc_id] += 1 / (k + rank + 1)
                 doc_data[doc_id]['found_by_methods'].add(q_type)
 
-        # Sort by score
+        # Sort by RRF score
         sorted_ids = sorted(doc_scores.keys(), key=lambda x: doc_scores[x], reverse=True)
         
-        final_results = []
-        for doc_id in sorted_ids[:match_count]:
+        # Get more results for document-level aggregation
+        # We want ~5x match_count for good aggregation (e.g., 50 chunks for 10 results)
+        rrf_results = []
+        for doc_id in sorted_ids[:initial_match_count]:
             doc = doc_data[doc_id]
             # Convert set to list for JSON serialization/display
             doc['found_by_methods'] = list(doc['found_by_methods'])
-            final_results.append(doc)
+            rrf_results.append(doc)
+        
+        # Apply document-level aggregation to surface multi-chunk documents
+        final_results = self.aggregate_by_document(rrf_results, match_count)
             
         return final_results

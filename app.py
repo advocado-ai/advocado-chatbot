@@ -355,6 +355,9 @@ elif page == t["nav_chat"]:
                         file_path = source['file_path']
                         similarity = source['similarity']
                         
+                        # Get document-level metadata if available
+                        chunk_count = source.get('chunk_count')
+                        
                         # Convert to PDF path for display
                         display_path = convert_to_pdf_path(file_path)
                         
@@ -366,7 +369,11 @@ elif page == t["nav_chat"]:
                         
                         col1, col2 = st.columns([3, 1])
                         with col1:
-                            st.markdown(f"**{i+1}. {display_path}** (Relevance: {similarity:.2f})")
+                            # Show chunk count if available for multi-chunk docs
+                            if chunk_count and chunk_count > 1:
+                                st.markdown(f"**{i+1}. {display_path}** (Relevance: {similarity:.2f}, {chunk_count} chunks)")
+                            else:
+                                st.markdown(f"**{i+1}. {display_path}** (Relevance: {similarity:.2f})")
                         with col2:
                             if url:
                                 st.markdown(f"[{t['open_file']}]({url})")
@@ -501,6 +508,10 @@ elif page == t["nav_chat"]:
                     similarity = source['similarity']
                     doc_id = source.get('id') # Ensure your RAG search returns 'id'
                     
+                    # Get document-level metadata if available
+                    chunk_count = source.get('chunk_count')
+                    doc_score = source.get('doc_score')
+                    
                     # Convert to PDF path for display
                     display_path = convert_to_pdf_path(file_path)
                     
@@ -510,7 +521,11 @@ elif page == t["nav_chat"]:
                         # Fallback to signed URL (use converted path)
                         url = st.session_state.storage.get_signed_url(display_path)
                     
-                    st.markdown(f"**{i+1}. {display_path}** ({similarity:.2f})")
+                    # Display with chunk count if available
+                    if chunk_count and chunk_count > 1:
+                        st.markdown(f"**{i+1}. {display_path}** ({similarity:.2f}, {chunk_count} chunks)")
+                    else:
+                        st.markdown(f"**{i+1}. {display_path}** ({similarity:.2f})")
                     
                     col_a, col_b = st.columns([1, 1])
                     with col_a:
