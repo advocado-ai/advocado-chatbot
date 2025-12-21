@@ -93,6 +93,9 @@ Task:
    - "original_keywords": Key search terms extracted from the original query (space-separated).
    - "translated": The user's intent TRANSLATED into the TARGET language (if JP -> EN, if EN -> JP).
    - "translated_keywords": Key search terms extracted from the translated query (space-separated).
+   - "date_filter": Extract any specific date mentioned in the query in "YYYY-MM-DD" format. If no specific date is mentioned, return null.
+     - Example: "12月18日" -> "2025-12-18" (Assume 2025 if year not specified but context implies recent/future).
+     - Example: "Dec 18th" -> "2025-12-18".
 
 CRITICAL INSTRUCTION FOR KEYWORDS:
 - Focus on UNIQUE identifiers: Dates (e.g., "2025-12-18", "12月18日"), Names ("Murakami", "Iwabuchi"), Locations ("Vietnam"), Specific Terms ("Ultimatum", "Resignation").
@@ -102,12 +105,13 @@ CRITICAL INSTRUCTION FOR KEYWORDS:
   - GOOD: "2025-12-18", "Iwabuchi", "Ultimatum", "岩淵", "最後通告"
 
 Output Format:
-Return ONLY a valid JSON object with these 4 keys. Do not add markdown formatting or explanations.
+Return ONLY a valid JSON object with these 5 keys. Do not add markdown formatting or explanations.
 {{
   "original": "...",
   "original_keywords": "...",
   "translated": "...",
-  "translated_keywords": "..."
+  "translated_keywords": "...",
+  "date_filter": "YYYY-MM-DD" or null
 }}
 """
         try:
@@ -139,7 +143,8 @@ Return ONLY a valid JSON object with these 4 keys. Do not add markdown formattin
                 "original": query,
                 "original_keywords": query,
                 "translated": query,
-                "translated_keywords": query
+                "translated_keywords": query,
+                "date_filter": None
             }
 
     def generate_response(self, query: str, context_chunks: List[Dict[str, Any]], history: List[Dict[str, Any]] = None, model_id: str = "claude-sonnet-4-5-20250929") -> str:

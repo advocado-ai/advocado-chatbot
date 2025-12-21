@@ -156,6 +156,40 @@ class RAGEngine:
             print(f"Keyword search error: {e}")
             return []
 
+    def search_date(self, date_filter: str, match_count: int = 10) -> List[Dict[str, Any]]:
+        """
+        Perform a date-based search using the date_prefix column.
+        """
+        try:
+            params = {
+                'filter_date': date_filter,
+                'match_count': match_count
+            }
+            response = self.client.rpc('match_documents_by_date', params).execute()
+            results = response.data
+            
+            if not results:
+                return []
+                
+            # Fetch Google Drive links
+            if results and 'google_drive_link' not in results[0]:
+                ids = [r['id'] for r in results]
+                try:
+                    link_response = self.client.table('evidence_vectors') \
+                        .select('id, google_drive_link') \
+                        .in_('id', ids) \
+                        .execute()
+                    link_map = {item['id']: item.get('google_drive_link') for item in link_response.data}
+                    for r in results:
+                        r['google_drive_link'] = link_map.get(r['id'])
+                except Exception as e:
+                    print(f"Error fetching Google Drive links: {e}")
+            
+            return results
+        except Exception as e:
+            print(f"Date search error: {e}")
+            return []
+
     def find_similar(self, document_id: int, match_count: int = 5) -> List[Dict[str, Any]]:
         """
         Find documents similar to an existing document ID.
@@ -294,15 +328,27 @@ class RAGEngine:
             debug_log(f"  → Found {len(results)} keyword results for '{query_type}'")
             return query_type, results
 
+        # Helper function for date search
+        def _single_date_search(date_str, query_type):
+            if not date_str:
+                return query_type, []
+            debug_log(f"Searching date variant '{query_type}': {date_str}")
+            results = self.search_date(date_str, initial_match_count)
+            debug_log(f"  → Found {len(results)} date results for '{query_type}'")
+            return query_type, results
+
         # Run searches in parallel
         search_results_map = {}
         with ThreadPoolExecutor(max_workers=6) as executor:
-            future_to_query = {
-                executor.submit(_single_search, q_text, q_type): q_type 
-                for q_type, q_text in queries.items()
-            }
+            future_to_query = {}
             
-            # Add keyword searches
+            # 1. Vector Search (only for full sentence queries)
+            for q_type in ['original', 'translated']:
+                q_text = queries.get(q_type)
+                if q_text:
+                    future_to_query[executor.submit(_single_search, q_text, q_type)] = q_type
+
+            # 2. Keyword Search
             # FIX: Use extracted keywords (if available) instead of the full sentence
             # This ensures "2025年12月18日" is searched as a keyword, not the whole sentence
             kw_query_original = queries.get('original_keywords', queries.get('original'))
@@ -313,6 +359,11 @@ class RAGEngine:
             if kw_query_translated:
                 future_to_query[executor.submit(_single_keyword_search, kw_query_translated, 'keyword_translated')] = 'keyword_translated'
             
+            # 3. Date Search
+            date_filter = queries.get('date_filter')
+            if date_filter:
+                future_to_query[executor.submit(_single_date_search, date_filter, 'date_match')] = 'date_match'
+
             for future in as_completed(future_to_query):
                 try:
                     q_type, results = future.result()
