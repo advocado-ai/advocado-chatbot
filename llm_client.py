@@ -94,6 +94,13 @@ Task:
    - "translated": The user's intent TRANSLATED into the TARGET language (if JP -> EN, if EN -> JP).
    - "translated_keywords": Key search terms extracted from the translated query (space-separated).
 
+CRITICAL INSTRUCTION FOR KEYWORDS:
+- Focus on UNIQUE identifiers: Dates (e.g., "2025-12-18", "12月18日"), Names ("Murakami", "Iwabuchi"), Locations ("Vietnam"), Specific Terms ("Ultimatum", "Resignation").
+- REMOVE generic/common words that appear in almost every document.
+  - BAD (English): "meeting", "content", "document", "email", "about", "the"
+  - BAD (Japanese): "会議", "内容", "資料", "メール", "について"
+  - GOOD: "2025-12-18", "Iwabuchi", "Ultimatum", "岩淵", "最後通告"
+
 Output Format:
 Return ONLY a valid JSON object with these 4 keys. Do not add markdown formatting or explanations.
 {{
