@@ -354,12 +354,18 @@ elif page == t["nav_chat"]:
                     for i, source in enumerate(message["sources"]):
                         file_path = source['file_path']
                         similarity = source['similarity']
-                        
-                        # Get document-level metadata if available
+                        doc_score = source.get('doc_score')
                         chunk_count = source.get('chunk_count')
                         
                         # Convert to PDF path for display
                         display_path = convert_to_pdf_path(file_path)
+                        display_name = os.path.basename(display_path)
+                        
+                        # Content Preview
+                        content = source.get('content', '')
+                        if not content and 'all_chunks' in source and source['all_chunks']:
+                             content = source['all_chunks'][0].get('content', '')
+                        preview = content[:200].replace('\n', ' ') + "..." if content else ""
                         
                         # Check for Google Drive link first
                         url = source.get('google_drive_link')
@@ -367,18 +373,18 @@ elif page == t["nav_chat"]:
                             # Fallback to signed URL (use converted path)
                             url = st.session_state.storage.get_signed_url(display_path)
                         
-                        col1, col2 = st.columns([3, 1])
-                        with col1:
-                            # Show chunk count if available for multi-chunk docs
-                            if chunk_count and chunk_count > 1:
-                                st.markdown(f"**{i+1}. {display_path}** (Relevance: {similarity:.2f}, {chunk_count} chunks)")
-                            else:
-                                st.markdown(f"**{i+1}. {display_path}** (Relevance: {similarity:.2f})")
-                        with col2:
-                            if url:
-                                st.markdown(f"[{t['open_file']}]({url})")
-                            else:
-                                st.markdown(f"*{t['link_unavailable']}*")
+                        # Display
+                        score_val = doc_score if doc_score else similarity
+                        chunk_info = f", {chunk_count} chunks" if chunk_count and chunk_count > 1 else ""
+                        
+                        st.markdown(f"**{i+1}. {display_name}** (Score: {score_val:.2f}{chunk_info})")
+                        if preview:
+                            st.caption(f"_{preview}_")
+                            
+                        if url:
+                            st.markdown(f"[{t['open_file']}]({url})")
+                        else:
+                            st.markdown(f"*{t['link_unavailable']}*")
 
     # Chat Input
     if prompt := st.chat_input(t["chat_placeholder"]):
@@ -441,26 +447,54 @@ elif page == t["nav_chat"]:
 
             else:
                 # Standard Mode
-                optimized_query = st.session_state.llm.optimize_query(
+                optimization_result = st.session_state.llm.optimize_query(
                     prompt, 
                     recent_history, 
                     model_id=selected_model.api_id
                 )
-                print(f"[{time.strftime('%X')}] Optimization done ({time.time() - start_time:.2f}s): {optimized_query}")
+                optimized_query = optimization_result.get("query", prompt)
+                date_filter = optimization_result.get("date_filter")
+                
+                print(f"[{time.strftime('%X')}] Optimization done ({time.time() - start_time:.2f}s): {optimized_query} (Date: {date_filter})")
                 
                 if optimized_query != prompt:
                     st.caption(f"🔍 Searched for: {optimized_query}")
                 
-                # B. Retrieve Context (Standard)
+                # B. Retrieve Context (Standard + Date)
                 search_start = time.time()
                 print(f"[{time.strftime('%X')}] Starting vector search with {len(selected_folders)} folders selected...")
                 
+                # 1. Vector Search
                 results = st.session_state.rag.search(
                     optimized_query, 
                     match_count=match_count, 
                     threshold=threshold,
                     folder_filters=selected_folders if selected_folders else None
                 )
+                
+                # 2. Date Search (if applicable)
+                if date_filter:
+                    print(f"[{time.strftime('%X')}] Performing date search for: {date_filter}")
+                    date_results = st.session_state.rag.search_date(date_filter, match_count=match_count)
+                    
+                    # Merge results (prioritize date results)
+                    # Create a map of existing IDs to avoid duplicates
+                    existing_ids = {r['id'] for r in results}
+                    
+                    for dr in date_results:
+                        if dr['id'] not in existing_ids:
+                            results.insert(0, dr) # Add to top
+                            existing_ids.add(dr['id'])
+                        else:
+                            # If it exists, update score to the boosted date score
+                            for r in results:
+                                if r['id'] == dr['id']:
+                                    r['similarity'] = max(r['similarity'], dr['similarity'])
+                                    break
+                    
+                    # Re-sort by similarity
+                    results.sort(key=lambda x: x['similarity'], reverse=True)
+                    results = results[:match_count] # Trim to match_count
 
             print(f"[{time.strftime('%X')}] Search complete ({time.time() - search_start:.2f}s). Found {len(results)} unique results.")
             
@@ -514,7 +548,17 @@ elif page == t["nav_chat"]:
                     
                     # Convert to PDF path for display
                     display_path = convert_to_pdf_path(file_path)
+                    # CLEANUP: Show only filename
+                    display_name = os.path.basename(display_path)
                     
+                    # CONTENT PREVIEW
+                    content = source.get('content', '')
+                    # If aggregated, might be in 'all_chunks'
+                    if not content and 'all_chunks' in source and source['all_chunks']:
+                         content = source['all_chunks'][0].get('content', '')
+                    
+                    preview = content[:200].replace('\n', ' ') + "..." if content else ""
+
                     # Check for Google Drive link first
                     url = source.get('google_drive_link')
                     if not url:
@@ -522,33 +566,16 @@ elif page == t["nav_chat"]:
                         url = st.session_state.storage.get_signed_url(display_path)
                     
                     # Display with chunk count if available
-                    if chunk_count and chunk_count > 1:
-                        st.markdown(f"**{i+1}. {display_path}** ({similarity:.2f}, {chunk_count} chunks)")
-                    else:
-                        st.markdown(f"**{i+1}. {display_path}** ({similarity:.2f})")
+                    score_display = f"{doc_score:.2f}" if doc_score else f"{similarity:.2f}"
+                    chunk_info = f", {chunk_count} chunks" if chunk_count and chunk_count > 1 else ""
                     
-                    col_a, col_b = st.columns([1, 1])
-                    with col_a:
-                        if url:
-                            st.markdown(f"[{t['open_file']}]({url})")
-                        else:
-                            # Show debug info in tooltip
-                            debug_msg = st.session_state.storage.get_debug_info(display_path)
-                            st.markdown(f"*{t['link_unavailable']}*", help=debug_msg)
-                    with col_b:
-                        if doc_id:
-                            # Unique key for each button
-                            if st.button(f"🔍 Find Similar", key=f"sim_{doc_id}_{i}"):
-                                try:
-                                    with st.spinner("Finding related documents..."):
-                                        # Perform similarity search
-                                        similar_docs = st.session_state.rag.find_similar(doc_id)
-                                        if similar_docs:
-                                            st.markdown("**Related Documents:**")
-                                            for sim_doc in similar_docs:
-                                                sim_score = sim_doc.get('similarity', 0.0)
-                                                st.caption(f"- {sim_doc.get('file_path', 'Unknown')} ({sim_score:.2f})")
-                                        else:
-                                            st.caption("No similar documents found.")
-                                except Exception as e:
-                                    st.error(f"Error finding similar documents: {e}")
+                    st.markdown(f"**{i+1}. {display_name}** (Score: {score_display}{chunk_info})")
+                    if preview:
+                        st.caption(f"_{preview}_")
+                    
+                    if url:
+                        st.markdown(f"[{t['open_file']}]({url})")
+                    else:
+                        # Show debug info in tooltip
+                        debug_msg = st.session_state.storage.get_debug_info(display_path)
+                        st.markdown(f"*{t['link_unavailable']}*", help=debug_msg)

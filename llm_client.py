@@ -15,12 +15,13 @@ class LLMClient:
         else:
             self.client = Anthropic(api_key=api_key)
 
-    def optimize_query(self, query: str, history: List[Dict[str, Any]], model_id: str = "claude-sonnet-4-5-20250929") -> str:
+    def optimize_query(self, query: str, history: List[Dict[str, Any]], model_id: str = "claude-sonnet-4-5-20250929") -> Dict[str, Any]:
         """
         Uses the LLM to rewrite the search query based on conversation history.
+        Returns a dictionary with 'query' and 'date_filter'.
         """
         if not self.client:
-            return query
+            return {"query": query, "date_filter": None}
 
         # Format history for the prompt
         history_text = ""
@@ -39,13 +40,17 @@ Conversation History:
 
 User's Question: {query}
 
-The search query should:
-1. Resolve any pronouns (e.g., "he", "it", "that meeting") to specific names or entities mentioned in the history.
-2. Include key technical terms, names, or dates.
-3. Be optimized for a vector similarity search.
-4. IMPORTANT: If the User's Question is in Japanese, translate the search query into English keywords. The evidence database is in English.
+Task:
+1. Generate an optimized search query (resolve pronouns, include keywords).
+2. Extract any specific date mentioned in the query (YYYY-MM-DD).
 
-Return ONLY the search query string. Do not add quotes or explanations."""
+Output Format:
+Return ONLY a JSON object:
+{{
+  "query": "The optimized search query string",
+  "date_filter": "YYYY-MM-DD" or null
+}}
+"""
 
         try:
             message = self.client.messages.create(
@@ -56,10 +61,22 @@ Return ONLY the search query string. Do not add quotes or explanations."""
                     {"role": "user", "content": prompt}
                 ]
             )
-            return message.content[0].text.strip()
+            response_text = message.content[0].text.strip()
+            
+            # Clean up potential markdown code blocks
+            if response_text.startswith("```json"):
+                response_text = response_text[7:]
+            if response_text.startswith("```"):
+                response_text = response_text[3:]
+            if response_text.endswith("```"):
+                response_text = response_text[:-3]
+                
+            import json
+            return json.loads(response_text.strip())
+            
         except Exception as e:
             print(f"Query optimization error: {e}")
-            return query
+            return {"query": query, "date_filter": None}
 
     def expand_query_multilingual(self, query: str, history: List[Dict[str, Any]], model_id: str = "claude-sonnet-4-5-20250929") -> Dict[str, str]:
         """
