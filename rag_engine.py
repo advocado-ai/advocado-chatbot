@@ -3,6 +3,21 @@ import streamlit as st
 from supabase import create_client, Client
 from sentence_transformers import SentenceTransformer
 from typing import List, Dict, Any
+import logging
+
+# Configure debug mode - only activates in local development
+DEBUG_MODE = os.getenv('STREAMLIT_ENV') != 'cloud'  # True locally, False on Streamlit Cloud
+
+if DEBUG_MODE:
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='🔍 [%(levelname)s] %(message)s'
+    )
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+else:
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.WARNING)
 
 class RAGEngine:
     """
@@ -186,12 +201,15 @@ class RAGEngine:
         import math
         from collections import defaultdict
         
+        logger.debug(f"Aggregating {len(chunks)} chunks by document...")
         doc_chunks = defaultdict(list)
         
         # Group chunks by document
         for chunk in chunks:
             file_path = chunk['file_path']
             doc_chunks[file_path].append(chunk)
+        
+        logger.debug(f"  → Grouped into {len(doc_chunks)} unique documents")
         
         # Calculate document scores using Multi-Chunk Boosting
         doc_scores = []
@@ -226,12 +244,16 @@ class RAGEngine:
         # We'll retrieve 5x the requested amount, then aggregate and return top match_count
         initial_match_count = match_count * 5  # e.g., 50 if user wants 10
         
+        logger.info(f"Starting multilingual search: {len(queries)} variants, retrieving {initial_match_count} chunks each")
+        
         # Helper function for a single search
         def _single_search(query_text, query_type):
             if not query_text:
                 return query_type, []
             # Use expanded retrieval for better recall
+            logger.debug(f"Searching variant '{query_type}': {query_text}")
             results = self.search(query_text, initial_match_count, threshold, folder_filters=folder_filters)
+            logger.debug(f"  → Found {len(results)} results for '{query_type}'")
             return query_type, results
 
         # Run searches in parallel
@@ -251,6 +273,7 @@ class RAGEngine:
 
         # Aggregate results using Reciprocal Rank Fusion (RRF)
         # RRF score = 1 / (k + rank)
+        logger.info(f"Applying RRF aggregation across {len(search_results_map)} query variants")
         k = 60
         doc_scores = {}
         doc_data = {}
@@ -265,6 +288,8 @@ class RAGEngine:
                 
                 doc_scores[doc_id] += 1 / (k + rank + 1)
                 doc_data[doc_id]['found_by_methods'].add(q_type)
+        
+        logger.info(f"RRF aggregation: {len(doc_scores)} unique chunks found")
 
         # Sort by RRF score
         sorted_ids = sorted(doc_scores.keys(), key=lambda x: doc_scores[x], reverse=True)
@@ -278,7 +303,21 @@ class RAGEngine:
             doc['found_by_methods'] = list(doc['found_by_methods'])
             rrf_results.append(doc)
         
+        logger.info(f"Top {len(rrf_results)} RRF chunks ready for document aggregation")
+        
         # Apply document-level aggregation to surface multi-chunk documents
         final_results = self.aggregate_by_document(rrf_results, match_count)
+        
+        if DEBUG_MODE:
+            logger.info("\n" + "="*60)
+            logger.info(f"📊 FINAL TOP {len(final_results)} DOCUMENTS (after aggregation):")
+            logger.info("="*60)
+            for i, doc in enumerate(final_results, 1):
+                file_name = doc['file_path'].split('/')[-1]
+                chunk_count = doc.get('chunk_count', 1)
+                doc_score = doc.get('doc_score', doc.get('similarity', 0))
+                methods = doc.get('found_by_methods', [])
+                logger.info(f"{i:2d}. {file_name[:50]:50s} score={doc_score:.4f} chunks={chunk_count} methods={methods}")
+            logger.info("="*60 + "\n")
             
         return final_results
