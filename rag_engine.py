@@ -303,11 +303,15 @@ class RAGEngine:
             }
             
             # Add keyword searches
-            if 'original' in queries:
-                future_to_query[executor.submit(_single_keyword_search, queries['original'], 'keyword_original')] = 'keyword_original'
+            # FIX: Use extracted keywords (if available) instead of the full sentence
+            # This ensures "2025年12月18日" is searched as a keyword, not the whole sentence
+            kw_query_original = queries.get('original_keywords', queries.get('original'))
+            if kw_query_original:
+                future_to_query[executor.submit(_single_keyword_search, kw_query_original, 'keyword_original')] = 'keyword_original'
             
-            if 'translated' in queries:
-                future_to_query[executor.submit(_single_keyword_search, queries['translated'], 'keyword_translated')] = 'keyword_translated'
+            kw_query_translated = queries.get('translated_keywords', queries.get('translated'))
+            if kw_query_translated:
+                future_to_query[executor.submit(_single_keyword_search, kw_query_translated, 'keyword_translated')] = 'keyword_translated'
             
             for future in as_completed(future_to_query):
                 try:
