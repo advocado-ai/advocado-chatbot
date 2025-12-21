@@ -2,14 +2,14 @@ import streamlit as st
 import time
 import datetime
 import extra_streamlit_components as stx
-from rag_engine import RAGEngine
-from storage_client import StorageClient
-from llm_client import LLMClient
-from models import MODELS, DEFAULT_MODEL_ID, get_model_by_id
-from translations import TRANSLATIONS
+from modules.rag_engine import RAGEngine
+from modules.storage_client import StorageClient
+from modules.llm_client import LLMClient
+from modules.models import MODELS, DEFAULT_MODEL_ID, get_model_by_id
+from modules.translations import TRANSLATIONS
 from streamlit_tree_select import tree_select
-from tree_utils import build_folder_tree, load_folders_from_json
-from chat_history import ChatHistoryManager
+from modules.tree_utils import build_folder_tree, load_folders_from_json
+from modules.chat_history import ChatHistoryManager
 import os
 from pathlib import Path
 
