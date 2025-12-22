@@ -53,6 +53,7 @@ Thumbs.db
 *.log
 
 # Sensitive Data / Evidence Inventories
+imports/
 docs/evidence_examples/
 docs/gdrive_inventory/
 docs/search_by_folder/
