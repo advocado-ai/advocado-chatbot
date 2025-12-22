@@ -196,7 +196,7 @@ with st.sidebar:
     # Use a consistent key for the radio button to avoid state reset issues, 
     # but we need to handle the label change manually if we want it to persist across languages.
     # Actually, simpler: just check against both English and Japanese strings.
-    page = st.radio(t["navigation"], [t["nav_chat"], t["nav_docs"]])
+    page = st.radio(t["navigation"], [t["nav_chat"], t["nav_docs"], t["nav_timeline"]])
     
     st.markdown("---")
     st.markdown(f"**{t['system_online']}**" if st.session_state.get("initialized") else f"**{t['system_offline']}**")
@@ -338,6 +338,83 @@ if page == t["nav_docs"]:
     ### {t['docs_security_title']}
     {t['docs_security_text']}
     """)
+
+elif page == t["nav_timeline"]:
+    st.title(t["timeline_title"])
+    st.markdown(t["timeline_intro"])
+    st.markdown("---")
+    
+    # Tabs for language selection
+    tab_en, tab_ja = st.tabs([t["timeline_tab_en"], t["timeline_tab_ja"]])
+    
+    # Import parser and renderer
+    from modules.timeline_parser import parse_timeline_markdown
+    from modules.timeline_renderer import render_timeline_html
+    
+    with tab_en:
+        timeline_file = "imports/timeline_examples/timeline_events.md"
+        events = parse_timeline_markdown(timeline_file)
+        
+        # Sidebar filters
+        with st.sidebar:
+            st.markdown("---")
+            st.markdown(f"### {t['timeline_filters']}")
+            
+            categories = [t["category_all"], t["category_whistleblowing"], 
+                         t["category_retaliation"], t["category_recognition"],
+                         t["category_obstruction"], t["category_meeting"],
+                         t["category_employment"], t["category_context"]]
+            
+            selected_category = st.selectbox(t["filter_by_category"], categories)
+        
+        # Filter events
+        if selected_category != t["category_all"]:
+            # Map translation back to English category name
+            category_map = {
+                t["category_whistleblowing"]: "Whistleblowing",
+                t["category_retaliation"]: "Retaliation",
+                t["category_recognition"]: "Recognition",
+                t["category_obstruction"]: "Obstruction",
+                t["category_meeting"]: "Meeting",
+                t["category_employment"]: "Employment",
+                t["category_context"]: "Context"
+            }
+            filter_cat = category_map.get(selected_category, selected_category)
+            events = [e for e in events if e['category'] == filter_cat]
+        
+        st.caption(t["event_count"].format(count=len(events)))
+        
+        # Render events using custom HTML renderer
+        timeline_html = render_timeline_html(events)
+        st.markdown(timeline_html, unsafe_allow_html=True)
+    
+    with tab_ja:
+        timeline_file_ja = "imports/timeline_examples/timeline_events_ja.md"
+        
+        if Path(timeline_file_ja).exists():
+            events_ja = parse_timeline_markdown(timeline_file_ja)
+            
+            # Filter events (reuse selected_category from sidebar)
+            if selected_category != t["category_all"]:
+                category_map = {
+                    t["category_whistleblowing"]: "Whistleblowing",
+                    t["category_retaliation"]: "Retaliation",
+                    t["category_recognition"]: "Recognition",
+                    t["category_obstruction"]: "Obstruction",
+                    t["category_meeting"]: "Meeting",
+                    t["category_employment"]: "Employment",
+                    t["category_context"]: "Context"
+                }
+                filter_cat = category_map.get(selected_category, selected_category)
+                events_ja = [e for e in events_ja if e['category'] == filter_cat]
+            
+            st.caption(t["event_count"].format(count=len(events_ja)))
+            
+            timeline_html_ja = render_timeline_html(events_ja)
+            st.markdown(timeline_html_ja, unsafe_allow_html=True)
+            
+        else:
+            st.warning("日本語版のタイムラインファイルが見つかりません。")
 
 elif page == t["nav_chat"]:
     # Main Chat Interface
