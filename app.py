@@ -196,7 +196,13 @@ with st.sidebar:
     # Use a consistent key for the radio button to avoid state reset issues, 
     # but we need to handle the label change manually if we want it to persist across languages.
     # Actually, simpler: just check against both English and Japanese strings.
-    page = st.radio(t["navigation"], [t["nav_chat"], t["nav_docs"], t["nav_timeline"]])
+    
+    # Safe access for keys to prevent deployment crashes
+    nav_chat = t.get("nav_chat", "Chat Assistant")
+    nav_docs = t.get("nav_docs", "Documentation")
+    nav_timeline = t.get("nav_timeline", "Timeline")
+    
+    page = st.radio(t.get("navigation", "Navigation"), [nav_chat, nav_docs, nav_timeline])
     
     st.markdown("---")
     st.markdown(f"**{t['system_online']}**" if st.session_state.get("initialized") else f"**{t['system_offline']}**")
@@ -207,7 +213,10 @@ with st.sidebar:
     
     # Check if page matches EITHER English OR Japanese "Chat" string
     # This ensures the sidebar renders even if the radio button state is slightly out of sync during a rerun
-    is_chat_page = (page == TRANSLATIONS["English"]["nav_chat"]) or (page == TRANSLATIONS["Japanese"]["nav_chat"])
+    # Use .get() for safety here as well
+    chat_en = TRANSLATIONS["English"].get("nav_chat", "Chat Assistant")
+    chat_ja = TRANSLATIONS["Japanese"].get("nav_chat", "チャットアシスタント")
+    is_chat_page = (page == chat_en) or (page == chat_ja)
     
     if is_chat_page:
         st.markdown("---")
@@ -317,7 +326,7 @@ with st.sidebar:
             st.session_state.messages = []
             st.rerun()
 
-if page == t["nav_docs"]:
+if page == t.get("nav_docs", "Documentation"):
     st.title(t["docs_title"])
     
     st.markdown(f"""
@@ -339,13 +348,13 @@ if page == t["nav_docs"]:
     {t['docs_security_text']}
     """)
 
-elif page == t["nav_timeline"]:
-    st.title(t["timeline_title"])
-    st.markdown(t["timeline_intro"])
+elif page == t.get("nav_timeline", "Timeline"):
+    st.title(t.get("timeline_title", "Case Timeline"))
+    st.markdown(t.get("timeline_intro", "Chronological view of key events"))
     st.markdown("---")
     
     # Tabs for language selection
-    tab_en, tab_ja = st.tabs([t["timeline_tab_en"], t["timeline_tab_ja"]])
+    tab_en, tab_ja = st.tabs([t.get("timeline_tab_en", "English"), t.get("timeline_tab_ja", "Japanese")])
     
     # Import parser and renderer
     from modules.timeline_parser import parse_timeline_markdown
